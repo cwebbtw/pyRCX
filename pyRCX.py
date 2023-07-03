@@ -1,9 +1,5 @@
 import threading
 
-# memory happy iterations
-
-import itertools
-
 # Random generator
 
 from random import random
@@ -28,17 +24,14 @@ from traceback import extract_tb
 
 #link hashing
 
-import sha
-
-
-import errno
+from hashlib import sha256
 
 # link compression
 try:
 	from zlib import compress,decompress
 except ImportError: # compression isn't mandatory but linking servers must support linking
 
-	print "*** IMPORTANT: zlib is not installed on this copy of python, either install it or make sure that the server you link with also doesn't have zlib installed"
+	print("*** IMPORTANT: zlib is not installed on this copy of python, either install it or make sure that the server you link with also doesn't have zlib installed")
 
 	def compress(blah):
 		return blah
@@ -781,7 +774,7 @@ class ClientBaseClass:
 
 	def send(self,data):
 		try:
-			print "Data to send: " + data
+			print("Data to send: " + data)
 			self.linkclass.sendRawData(self._nickname,data)
 		except:
 			pass
@@ -803,7 +796,7 @@ def sendLinkRequestData(recipients,request,parameters):
 				eachlink.link._sock.sendall("\x00\x01\x00 0 %s %s\r\n" % (request,parameters))
 			except:
 				tuError = sys.exc_info()
-				print tuError
+				print(tuError)
 
 
 #sendLinkRequestData(loller,"2","") # Request Channel list
@@ -962,7 +955,7 @@ class Link(threading.Thread):
 					sdata += char
 				
 				try:
-					print "recv:" + sdata + "#"
+					print("recv:" + sdata + "#")
 					p = sdata.split(" ")
 					try:
 						if p[0] + p[1] + p[3] == "\x00\x00\x00": #HANDSHAKE
@@ -1038,7 +1031,7 @@ class Link(threading.Thread):
 											compileListOfChannels += eachchan._topic + "\x00" + str(eachchan._topic_time) + "\x00" + eachchan._topic_nick + "\x00" + eachchan._founder + "\x00"
 											compileListOfChannels += dumps(eachchan._prop).encode("hex") + "\x00"
 											flist = {}
-											for each in eachchan._users.keys():
+											for each in list(eachchan._users.keys()):
 												ioperLevel = 0
 												if each in eachchan._op: ioperLevel = 5
 												if each in eachchan._owner: ioperLevel = 7
@@ -1055,8 +1048,8 @@ class Link(threading.Thread):
 									self.send(socketsendData)
 								except:
 									tuError = sys.exc_info()
-									print tuError
-									print extract_tb(tuError[2])
+									print(tuError)
+									print(extract_tb(tuError[2]))
 
 						elif p[0] == "\x01\x00\x01": # Receiving data (IGNORE NOW 095455 ID)
 
@@ -1136,7 +1129,7 @@ class Link(threading.Thread):
 										if m_setting == False:
 											if eachmode == "o":
 												if theirnick.lower() in self._opers:
-													print "removing opers"
+													print("removing opers")
 													del self._opers[theirnick.lower()]
 													nid._MODE_ = nid._MODE_.replace("o","")
 													nid._MODE_ = nid._MODE_.replace("a","")
@@ -1242,7 +1235,7 @@ class Link(threading.Thread):
 											collision_nick = nicknames[properties[0].lower()]
 											collision_linknick = self._nicknames[properties[0].lower()]
 											if collision_nick._signontime < collision_linknick._signontime:
-												print "collision on server with the nickname being linked with me"
+												print("collision on server with the nickname being linked with me")
 											else:
 												self.oNotice(":" + ServerName + " NOTICE LINK :*** Nickname collision on this server (%s!%s@%s$%s) [%s]\r\n" % (collision_nick._nickname,collision_nick._username,collision_nick._hostmask,ServerName,collision_nick.details[0]))
 												collision_nick.send(":" + ServerName + " NOTICE LINK :*** You have been involved in a nickname collision and will be disconnected\r\n")
@@ -1262,7 +1255,7 @@ class Link(threading.Thread):
 											properties = each.split("\x00")
 											self._channels[properties[0].lower()] = ChannelBaseClass()
 											lc = self._channels[properties[0].lower()]
-											print "The channel I am adding to my database is: " + properties[0].lower()
+											print("The channel I am adding to my database is: " + properties[0].lower())
 											lc.channelname = properties[0]
 											setupModes(lc,properties[1])
 											lc._topic = properties[2]
@@ -1286,13 +1279,13 @@ class Link(threading.Thread):
 												if ioperLevel == 1: lc._voice.append(eachuser)
 								except:
 									tuError = sys.exc_info()
-									print tuError
-									print extract_tb(tuError[2])
+									print(tuError)
+									print(extract_tb(tuError[2]))
 
 								self.oNotice(":" + ServerName + " NOTICE LINK :*** Synchronisation of server data (" + self.link._serverName + "@" + self.link._serverAddress + ") complete.. (%.2fs)\r\n" % (time.time() - self.linktime))
 
 				except IndexError:
-					print "UH OH BUG"
+					print("UH OH BUG")
 
 		self.link._linkfail = 3
 
@@ -1434,7 +1427,7 @@ def GetUsers():
 			Nickserv = loads(decompress(rdata))
 			#Nickserv = pickle.loads(rdata)
 	except:
-		raise IOError, "Could not load Nickserv database, possibly because it is corrupted"
+		raise IOError("Could not load Nickserv database, possibly because it is corrupted")
 
 	myfile.close()
 
@@ -1620,7 +1613,7 @@ def rehash(par=1): # this information will be rehashed by any operator with leve
 	except:
 		tuError = sys.exc_info()
 		_lastError.append([tuError,[time.strftime("%a %b %d %H:%M:%S %Y GMT",time.localtime()),"System rehash on line: " + str(line_num)],extract_tb(tuError[2])])
-		print "Rehash error, line: " + str(line_num)
+		print("Rehash error, line: " + str(line_num))
 		
 
 def unsigned(number):
@@ -1635,13 +1628,13 @@ def raw(param1="",param2="",param3="",param4="",param5="",param6="",param7=""):
 		param1.send(":" + ServerName + " 001 " + param3 + " :Welcome to the " + NetworkName + " chat service " + param3 + "\r\n")
 
 	if param2 == "002":
-		param1.send(":" + ServerName + " 002 " + param3 + " :Your host is " + param4 + ", running version 2.5.2\r\n")
+		param1.send(":" + ServerName + " 002 " + param3 + " :Your host is " + param4 + ", running version 3.0.0\r\n")
 
 	if param2 == "003":
 		param1.send(":" + ServerName + " 003 " + param3 + " :This server was created on %s\r\n" % (time.strftime("%A %B %d %H:%M:%S %Y GMT",time.localtime())))
 
 	if param2 == "004":
-		param1.send(":" + ServerName + " 004 " + param3 + " " + param4 + " pyRCX 2.5.2 abAfghiInoOpPrwzX aAbcCdefGhikKlmMnNopPqQrRsStTuvwxXZ\r\n")
+		param1.send(":" + ServerName + " 004 " + param3 + " " + param4 + " pyRCX 3.0.0 abAfghiInoOpPrwzX aAbcCdefGhikKlmMnNopPqQrRsStTuvwxXZ\r\n")
 
 	if param2 == "005":
 		if "IRCX" in Disabled:
@@ -1676,7 +1669,7 @@ def raw(param1="",param2="",param3="",param4="",param5="",param6="",param7=""):
 		param1.send(":" + ServerName + " 256 " + param3 + " :" + NetworkName + " communications service\r\n") #display if operators available
 
 	if param2 == "257":
-		param1.send(":" + ServerName + " 257 " + param3 + " :pyRCX version 2.5.2, see /CREDITS\r\n") #display if operators available
+		param1.send(":" + ServerName + " 257 " + param3 + " :pyRCX version 3.0.0, see /CREDITS\r\n") #display if operators available
 
 	if param2 == "258":
 		param1.send(":" + ServerName + " 258 " + param3 + " :" + ServerAdmin1 + "\r\n")
@@ -1849,7 +1842,7 @@ def raw(param1="",param2="",param3="",param4="",param5="",param6="",param7=""):
 		param1.send(":" + ServerName + " 368 " + param3 + " " + param4 + " :End of Channel Ban List\r\n")
 
 	if param2 == "371":
-		param1.send(":" + ServerName + " 371 " + param3 + " :" + NetworkName + " communication service 2.5.2\r\n:" + ServerName + " 371 " + param3 + ServerLaunch + "\r\n")
+		param1.send(":" + ServerName + " 371 " + param3 + " :" + NetworkName + " communication service 3.0.0\r\n:" + ServerName + " 371 " + param3 + ServerLaunch + "\r\n")
 
 	if param2 == "372":
 			param1.send(":" + ServerName + " 372 " + param3 + " :- " + param4.replace("\r","").replace("\n","") + "\r\n")
@@ -2117,9 +2110,13 @@ def raw(param1="",param2="",param3="",param4="",param5="",param6="",param7=""):
 		param1.send(":%s 998 %s %s %s :Cannot invite to channel\r\n" % (ServerName,param3,param4,param5))
 
 	if param2 == "955":
-		param1.send(":%s 955 %s :\x02Credits - pyRCX networking chat service 2.5.2\x02\r\n:%s 955 %s :Christopher James\r\n" % (ServerName,param3,ServerName,param3))
+		param1.send(":%s 955 %s :\x02Credits - pyRCX networking chat service 3.0.0\x02\r\n:%s 955 %s :Christopher Webb\r\n" % (ServerName,param3,ServerName,param3))
 		param1.send(":%s 955 %s :-\r\n" % (ServerName,param3))
-		param1.send(":%s 955 %s :\x02With thanks to:\x02\r\n:%s 955 %s :Darren Davies, Rob Lancaster, Kevin Deveau, Aaron Caffrey\r\n" % (ServerName,param3,ServerName,param3))
+		param1.send(":%s 955 %s :\x02With thanks to:\x02\r\n:%s 955 %s :Darren Davies, Rob Lancaster, Kevin Deveau, Aaron Caffrey, Shane Britt\r\n" % (ServerName,param3,ServerName,param3))
+		param1.send(":%s 955 %s :-\r\n" % (ServerName,param3))
+		param1.send(":%s 955 %s :\x02In loving memory of:\x02\r\n:%s 955 %s :Danny Moon, Ricky Laurn\r\n" % (ServerName,param3,ServerName,param3))
+		param1.send(":%s 955 %s :-\r\n" % (ServerName,param3))
+		param1.send(":%s 955 %s :\x02Be kind to one another, love like it's your last day on this amazing planet.\r\n" % (ServerName,param3))
 
 def myint(strdata):
 	try:
@@ -2595,7 +2592,7 @@ class Access:
 		if _mask[0] == "&":
 			if "&" == _mask[0]:
 				if cid._MODE_register:
-					for groupnicks in Nickserv.values():
+					for groupnicks in list(Nickserv.values()):
 						if _mask[1:].lower() in groupnicks._groupnick or _mask[1:].lower() == groupnicks._nickname.lower():
 							if cid._nickname.lower() in groupnicks._groupnick or cid._nickname.lower() == groupnicks._nickname.lower():
 								return 1
@@ -2645,7 +2642,7 @@ class Access:
 				if strin.lower()[1:] in Nickserv or server == True:
 					return strin
 				else:
-					for groupnicks in Nickserv.values():
+					for groupnicks in list(Nickserv.values()):
 						if strin.lower()[1:] in groupnicks._groupnick:
 							return strin
 
@@ -2759,7 +2756,7 @@ class Access:
 		
 		else:
 			for each in list(cid._access):
-				 if level == "" or level.upper() == each._level.upper():
+				if level == "" or level.upper() == each._level.upper():
 					cid._access.remove(each)
 #					self.records.remove(each)
 			
@@ -2941,10 +2938,9 @@ def setupModes(self,creationmodes_full):
 
 
 class Channel(ChannelBaseClass):
-
 	def __validate(self,channelname,joinuser):
 		chanprefix = "(" + "|".join(ChanPrefix.split(",")) + ")"
-		p = re.compile("^" + chanprefix + "[\x21-\x2B\x2D-\xFF]{0,128}$")
+		p = re.compile(f"^{chanprefix}[\u0021-\u002B\u002E-\u00FF\-]{{0,128}}$")
 		if p.match(channelname) == None or _filter(nicknames[joinuser.lower()],channelname,"chan") == False:
 			return False
 		else:
@@ -3118,7 +3114,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 			else:
 				r,w,e = select([],[self.client],[],1)
 				if w:
-					self.client.sendall(data)
+					self.client.sendall(data.encode("UTF-8"))
 		except:
 			pass
 
@@ -3248,7 +3244,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 
 		is_groupednick = False
 
-		for groupnicks in Nickserv.values():
+		for groupnicks in list(Nickserv.values()):
 			if self._nickname.lower() in groupnicks._groupnick:
 				is_groupednick = True
 				break
@@ -3329,10 +3325,10 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 	def run(self):
 		unknownConnections.append(self)
 		connections.append(self)
-		print "*** Connection accepted from '",self.details[0],"' users[",str(len(connections)),"/",MaxUsers,"]"
+		print("*** Connection accepted from '",self.details[0],"' users[",str(len(connections)),"/",MaxUsers,"]")
 
 		if str(len(connections)-1) == str(MaxUsers):
-			print "*** Connection closed '",self.details[0],"', server is full"
+			print("*** Connection closed '",self.details[0],"', server is full")
 			self.send(":" + ServerName + " NOTICE AUTH :*** Sorry, this server is full, you can try reconnecting\r\n")
 			self.send("ERROR :Closing Link: %s (Server is full)\r\n" % (self.details[0]))
 			self.close()
@@ -3361,11 +3357,11 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 						exemptFromConnectionKiller = True
 						break
 			except:
-				print sys.exc_info()
+				print(sys.exc_info())
 
 			if str(MaxUsersPerConnection) == str(calcuseramount) and ipaddress != userdetails and exemptFromConnectionKiller == False:   #bots run from localhost, can't limit to 3 bots!!!
 				unknownConnections.remove(self)
-				print "*** Connection closed '",self.details[0],"', too many connections"
+				print("*** Connection closed '",self.details[0],"', too many connections")
 				
 				self.send(":" + ServerName + " NOTICE AUTH :*** Sorry, your client is restricted to %d clones\r\n" % (MaxUsersPerConnection))
 				
@@ -3391,18 +3387,13 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 					self._hostmask = self.details[0].split(".")[0] + "." + self.details[0].split(".")[1] + ".XXX.XXX"
 				
 				elif str(HostMasking) == "2":
+					shortmask = sha256((self.details[0] + HostMaskingParam).encode('utf-8')).hexdigest().upper()[:5]
+
 					if self._hostname == self.details[0]:			 # 127.0.0.1 - 127.0.A4EFF
 						maskstart = self._hostname.split(".",2)[2]
-						m = sha.new()
-						m.update(self.details[0] + HostMaskingParam)
-						shortmask = m.hexdigest().upper()[:5]
-
 						self._hostmask = maskstart + "." + shortmask
 					else:
 						maskstart = self._hostname.split(".",1)[0]
-						m = sha.new()
-						m.update(self.details[0] + HostMaskingParam)
-						shortmask = m.hexdigest().upper()[:5]
 						try:
 							self._hostmask = shortmask + "." + self._hostname.split(".",1)[1]
 						except:
@@ -3412,17 +3403,13 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 					self._hostmask = HostMaskingParam
 				
 				elif str(HostMasking) == "4":
-					m = sha.new()
-					m.update(self.details[0] + HostMaskingParam)
-					self._hostmask = m.hexdigest().upper()[:16]
+					self._hostmask = sha256((self.details[0] + HostMaskingParam).encode('utf-8')).hexdigest().upper()[:16]
 							
 				elif str(HostMasking) == "5":
 					self._hostmask = HostMaskingParam
 
 				elif str(HostMasking) == "6":
-					m = sha.new()
-					m.update(self.details[0] + HostMaskingParam)
-					shastring = m.hexdigest().upper()
+					shastring = sha256((self.details[0] + HostMaskingParam).encode('utf-8')).hexdigest().upper()
 					self._hostmask = self.details[0].split(".")[0] + "." + self.details[0].split(".")[1] + "." + shastring[0:3] + "." + shastring[3:6]
 				else:
 					self._hostmask = self.details[0] 
@@ -3459,15 +3446,16 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 										closesock = True
 										break
 
-									elif c == "\n" or c == "\r":
+									elif c == "\n".encode() or c == "\r".encode():
 										c = ""
 										# read a line
 										break
 
 									else:
-										strdata+=c
+										strdata+=c.decode("cp1252")
 									
-							except socket.error, (value,message):
+							except socket.error as xxx_todo_changeme:
+								(value,message) = xxx_todo_changeme.args
 								if errno.ECONNABORTED == value or errno.ECONNRESET == value:
 									self.quittype = 0
 									closesock = True
@@ -3487,7 +3475,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 
 
 						if closesock:
-							print "breaking lol"
+							print("breaking lol")
 							break
 
 
@@ -3513,7 +3501,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 						#print "data" + strdata
 
 						#print "message starts"
-						print param
+						print(param)
 						#print "message ends"
 						_sleep = "%.4f" % (random()/9)
 						_disabled = self._isDisabled(param[0])
@@ -3534,7 +3522,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 									self.lastcommand = int(GetEpochTime())
 
 									if self.flooding == 20: # 15 commands per 1000 miliseconds, anymore than that will kill the user
-										print "Input flooding!!"
+										print("Input flooding!!")
 										self.quittype = 4
 										self.send("ERROR :Closing Link: " + self.details[0] + " (Input flooding)\r\n")
 										self.die = True
@@ -3606,9 +3594,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 												self._username = PrefixChar + param[1].replace(PrefixChar,"")
 
 											elif str(HostMasking) == "5":
-												m = sha.new()
-												m.update(self.details[0] + HostMaskingParam)
-												self._username = PrefixChar + m.hexdigest().upper()[:16]
+												self._username = PrefixChar + sha256((self.details[0] + HostMaskingParam).encode('utf-8')).hexdigest().upper()[:16]
 
 											if self._logoncheck():
 												self._sendwelcome()
@@ -3823,7 +3809,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 
 												elif param[1] == "P":
 													self.send(":" + ServerName + " NOTICE STATS :*** Viewing Port statistics '" + param[1][0] + "' \r\n")
-													for each in currentports.keys():
+													for each in list(currentports.keys()):
 														self.send(":" + ServerName + " 212 " + self._nickname + " :Running server on: " + each + "\r\n")
 
 												elif param[1] == "F":
@@ -4220,7 +4206,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 																		floodlimit = 30
 																	
 																	if self.pmflooding == floodlimit and "PRIVMSG" not in FloodingExempt: # 15 commands per 1000 miliseconds, anymore than that will kill the user
-																		print "Input flooding!!"
+																		print("Input flooding!!")
 																		self.quittype = 4
 																		self.send("ERROR :Closing Link: " + self.details[0] + " (Input flooding)\r\n")
 																		self.die = True
@@ -4262,7 +4248,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 																floodlimit = 20
 																
 																if self.pmflooding == floodlimit: # 15 commands per 1000 miliseconds, anymore than that will kill the user
-																	print "Input flooding!!"
+																	print("Input flooding!!")
 																	self.quittype = 4
 																	self.send("ERROR :Closing Link: " + self.details[0] + " (Input flooding)\r\n")
 																	self.die = True
@@ -4387,7 +4373,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 										try:
 											raw(self,"321",self._nickname)
 											for chanid in getGlobalChannels():
-												print chanid.channelname
+												print(chanid.channelname)
 												#chanid = channels[each.lower()]
 												chanusers = str(len(chanid._users) - len(chanid._watch))
 												if chanid.MODE_auditorium and self._nickname.lower() not in opers and isOp(self._nickname.lower(),chanid.channelname) == False:
@@ -5318,14 +5304,13 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 										secPass = ""
 										while len(secPass) < 64:
 											c = 33
-											print len(secPass)
+											print(len(secPass))
 											while c > 32:
 												c = int(random()*255)
 												secPass += chr(c)
 												break
 
-										mkshapass = sha.new()
-										mkshapass.update(secPass)
+										mkshapass = sha256(secPass.encode('utf-8'))
 
 										self.send(":" + ServerName + " NOTICE GENPASS :*** Your securely generated password is: %s\r\n" % (mkshapass.hexdigest()))
 
@@ -5526,7 +5511,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 				
 						
 		try:
-			print "*** Connection closed from '",self.details[0],"'",self._nickname,"left the server"
+			print("*** Connection closed from '",self.details[0],"'",self._nickname,"left the server")
 			quit = ""
 			if self.quittype != 9 and self.quittype != 10:
 				for allservers in linkedServers: allservers.sendUserDisconnect(self)
@@ -5585,7 +5570,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 												pass
 						del temp
 					except:
-						print "uh oh bug"
+						print("uh oh bug")
 
 				del sendto
 
@@ -5610,13 +5595,13 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 
 		except:
 			tuError = sys.exc_info()
-			print tuError
+			print(tuError)
 
 		for each in copy(self._channels):
 			try:
 				channels[each.lower()].quit(self._nickname)
 			except:
-				print "some channel error"
+				print("some channel error")
 
 		if self in invisible: invisible.remove(self)
 		if self._nickname.lower() in opers: 
@@ -5843,7 +5828,7 @@ def Nick_function(self,param):
 
 						is_groupednick = False
 
-						for groupnicks in Nickserv.values():
+						for groupnicks in list(Nickserv.values()):
 							if self._nickname.lower() in groupnicks._groupnick or self._nickname.lower() == groupnicks._nickname.lower():
 								if temp_oldnick.lower() in groupnicks._groupnick or temp_oldnick.lower() == groupnicks._nickname.lower():
 									if self._MODE_register:
@@ -6824,12 +6809,12 @@ def Nickserv_function(self,param,msgtype=""):
 								exemptFromConnectionKiller = True
 								break
 					except:
-						print sys.exc_info()
+						print(sys.exc_info())
 
 					if NickservIPprotection == False: exemptFromConnectionKiller = True
 
 					grouped_nick = False
-					for groupnicks in Nickserv.values():
+					for groupnicks in list(Nickserv.values()):
 						if self._nickname.lower() in groupnicks._groupnick:
 							grouped_nick = True
 							break
@@ -6845,8 +6830,7 @@ def Nickserv_function(self,param,msgtype=""):
 							opid = opers[self._nickname.lower()]
 							olevel = opid.operlevel
 						
-						writehash = sha.new()
-						writehash.update(passw + NickservParam)
+						writehash = sha256((passw + NickservParam).encode('utf-8'))
 
 						Nickserv[self._nickname.lower()] = NickServ(self._nickname,writehash.hexdigest(),emaila,GetEpochTime(),self.details[0],"",olevel,False) #add to the nickname database
 						self.send(":%s!%s@%s %s %s :\x02Registration complete\x02\r\n:%s!%s@%s %s %s :Your nickname has been registered with the address *@%s\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname,"NickServ","NickServ",NetworkName,replyType,self._nickname,self._hostmask))
@@ -6863,7 +6847,7 @@ def Nickserv_function(self,param,msgtype=""):
 				self.send(":%s!%s@%s %s %s :Syntax: \x02REGISTER \x1Fpassword\x1F \x1Femail\x1F\x02\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname))
 		
 		elif param[1] == "HELLO":
-			self.send(":%s!%s@%s %s %s :hello to you too! does your mummy know you're on IRC?\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname))
+			self.send(":%s!%s@%s %s %s :hello to you too!\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname))
 
 		elif param[1] == "IPLOCK":
 			if len(param) == 2:
@@ -6929,7 +6913,7 @@ def Nickserv_function(self,param,msgtype=""):
 				else:
 					passw = param[2]
 					grouped_nick = None
-					for groupnicks in Nickserv.values():
+					for groupnicks in list(Nickserv.values()):
 						if self._nickname.lower() in groupnicks._groupnick:
 							grouped_nick = groupnicks
 							break
@@ -6940,8 +6924,7 @@ def Nickserv_function(self,param,msgtype=""):
 						else:
 							ns = Nickserv[self._nickname.lower()]
 
-						writehash1 = sha.new()
-						writehash1.update(passw + NickservParam)
+						writehash1 = sha256((passw + NickservParam).encode('utf-8'))
 
 						if writehash1.hexdigest() == ns._password:
 							self._MODE_register = True
@@ -6969,7 +6952,7 @@ def Nickserv_function(self,param,msgtype=""):
 				passw = param[3]
 
 				groupnick = None
-				for groupnicks in Nickserv.values():
+				for groupnicks in list(Nickserv.values()):
 					if nickn.lower() in groupnicks._groupnick:
 						groupnick = groupnicks
 						break
@@ -6980,8 +6963,8 @@ def Nickserv_function(self,param,msgtype=""):
 					else:
 						ns = Nickserv[nickn.lower()]
 
-					writehash1 = sha.new()
-					writehash1.update(passw + NickservParam)
+					
+					writehash1 = sha256((passw + NickservParam).encode('utf-8'))
 
 					if writehash1.hexdigest() == ns._password:
 						if nickn.lower() in nicknames:
@@ -7033,7 +7016,7 @@ def Nickserv_function(self,param,msgtype=""):
 			try:
 				nickn = param[2]
 				grouped_nick = None
-				for groupnicks in Nickserv.values():
+				for groupnicks in list(Nickserv.values()):
 					if nickn.lower() in groupnicks._groupnick:
 						grouped_nick = groupnicks
 						break
@@ -7145,11 +7128,8 @@ def Nickserv_function(self,param,msgtype=""):
 						if nickn.lower() in Nickserv:
 							nid = Nickserv[nickn.lower()]
 
-							writehash1 = sha.new()
-							writehash1.update(value + NickservParam)
-
-							writehash2 = sha.new()
-							writehash2.update(value1 + NickservParam)
+							writehash1 = sha256((value + NickservParam).encode('utf-8'))
+							writehash2 = sha256((value1 + NickservParam).encode('utf-8'))
 
 							if writehash1.hexdigest() == nid._password:
 								nid._password = writehash2.hexdigest()
@@ -7174,8 +7154,8 @@ def Nickserv_function(self,param,msgtype=""):
 			try:
 				if param[2].lower() in Nickserv:
 					nid = Nickserv[param[2].lower()]
-					writehash1 = sha.new()
-					writehash1.update(param[3] + NickservParam)
+
+					writehash1 = sha256((param[3] + NickservParam).encode('utf-8'))
 					if writehash1.hexdigest() == nid._password:
 						if self._nickname.lower() not in nid._groupnick:
 							self.send(":%s!%s@%s %s %s :Error: No such nickname grouped to %s\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname,nid._nickname))
@@ -7198,14 +7178,13 @@ def Nickserv_function(self,param,msgtype=""):
 			try:
 				if param[2].lower() in Nickserv:
 					nid = Nickserv[param[2].lower()]
-					writehash1 = sha.new()
-					writehash1.update(param[3] + NickservParam)
+					writehash1 = sha256((param[3] + NickservParam).encode('utf-8'))
 					if writehash1.hexdigest() == nid._password:
 						if len(nid._groupnick) == 2:
 							self.send(":%s!%s@%s %s %s :Error: You can only \x02group\x02 two nicknames\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname))
 						else:
 							grouped_already = False
-							for groupnicks in Nickserv.values():
+							for groupnicks in list(Nickserv.values()):
 								if self._nickname.lower() in groupnicks._groupnick:
 									self.send(":%s!%s@%s %s %s :Error: This nickname is already grouped/registered\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname))
 									grouped_already = True
@@ -7241,7 +7220,7 @@ def Nickserv_function(self,param,msgtype=""):
 					passw = ""
 
 				grouped_nick = False
-				for groupnicks in Nickserv.values():
+				for groupnicks in list(Nickserv.values()):
 					if nickn.lower() in groupnicks._groupnick:
 						grouped_nick = True
 						self.send(":%s!%s@%s %s %s :Error: You cannot \x02drop\x02 a grouped nickname, please use \x1FUNGROUP\x1F\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname))
@@ -7251,8 +7230,7 @@ def Nickserv_function(self,param,msgtype=""):
 					if nickn.lower() in Nickserv:
 						ns = Nickserv[nickn.lower()]
 
-						writehash1 = sha.new()
-						writehash1.update(passw + NickservParam)
+						writehash1 = sha256((passw + NickservParam).encode('utf-8'))
 
 						if ns._password == writehash1.hexdigest() or self._nickname.lower() in opers:
 
@@ -7363,7 +7341,7 @@ class ServerListen(threading.Thread):
 			smain.settimeout(5.0)
 			smain.listen(100)
 
-			print "* Listening on port " + str(self.port) + " on '"+ ipaddress+"'"
+			print("* Listening on port " + str(self.port) + " on '"+ ipaddress+"'")
 
 			while True:
 				time.sleep(0.1)
@@ -7373,13 +7351,13 @@ class ServerListen(threading.Thread):
 						ClientConnecting(clientsocket,address,self.port).start()
 					except:
 						if self.port not in Ports:
-							print "*** Terminating server on port " + self.port
+							print("*** Terminating server on port " + self.port)
 							break
 
 				except:
-					print "There was an error whilst a user was connecting"
+					print("There was an error whilst a user was connecting")
 		except:
-			print "*** ERROR: Socket error on port " + str(self.port)  + "(Bind Error)"
+			print("*** ERROR: Socket error on port " + str(self.port)  + "(Bind Error)")
 
 		if self.port in currentports:
 			del currentports[self.port]
@@ -7390,7 +7368,7 @@ def GetUTC_NTP():
 	return 0
 
 	try:
-		TIME1970 = 2208988800L
+		TIME1970 = 2208988800
 		client = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 		data = '\x1b' + 47 * '\0'
 		client.sendto(data,(NTPServer, 123 ))
@@ -7412,25 +7390,25 @@ def GetEpochTime():
 
 def pyRCXsetup():
 	if os.path.isfile("database/channels.dat") == False: 
-		print "*** Could not find channels file, creating new channel file"
+		print("*** Could not find channels file, creating new channel file")
 		createfile = open("database/channels.dat","w")
 		createfile.close()
 		return 0
 
 	if os.path.isfile("database/access.dat") == False: 
-		print "*** Could not find access file, setting up access file"
+		print("*** Could not find access file, setting up access file")
 		createfile = open("database/access.dat","w")
 		createfile.close()
 		return 0
 
 	if os.path.isfile("database/Nickserv.dat") == False: 
-		print "*** Could not find Nickserv database, installing Nickserv"
+		print("*** Could not find Nickserv database, installing Nickserv")
 		createfile = open("database/Nickserv.dat","w")
 		createfile.close()
 		return 0
 
 	if os.path.isfile("database/users.dat") == False: 
-		print "*** Could not find previous historic user counts, history being setup"
+		print("*** Could not find previous historic user counts, history being setup")
 		createfile = open("database/access.dat","w")
 		createfile.write("1\n1\n")
 		createfile.close()
@@ -7448,75 +7426,79 @@ def SetupListeningSockets():
 
 def main():
 	
-	print " _____  __    __  _____    _____  __    __ "
-	print "|  _  \ \ \  / / |  _  \  /  ___| \ \  / / "
-	print "| |_| |  \ \/ /  | |_| |  | |      \ \/ /  "
-	print "|  ___/   \  /   |  _  /  | |       }  {   "
-	print "| |       / /    | | \ \  | |___   / /\ \  "
-	print "|_|      /_/     |_|  \_\ \_____| /_/  \_\ v2.5.2"
-	print "__________________________________________"
-	print ""
-	print "* Developed by chrisjw"
-	print "* Bug fixes and recommendations, see /CREDITS"
-	print "* Python: www.python.org"
-	print "* IRC:    irc.freenode.org"
-	print "__________________________________________"
-	print ""
+	print(" _____  __    __  _____    _____  __    __ ")
+	print("|  _  \ \ \  / / |  _  \  /  ___| \ \  / / ")
+	print("| |_| |  \ \/ /  | |_| |  | |      \ \/ /  ")
+	print("|  ___/   \  /   |  _  /  | |       }  {   ")
+	print("| |       / /    | | \ \  | |___   / /\ \  ")
+	print("|_|      /_/     |_|  \_\ \_____| /_/  \_\ v3.0.0")
+	print("__________________________________________")
+	print("")
+	print("* Developed by chrisjw")
+	print("* Bug fixes and recommendations, see /CREDITS")
+	print("* Python: www.python.org")
+	print("* IRC:    irc.freenode.org")
+	print("__________________________________________")
+	print("")
 
 	global timeDifference
 
-	print "*** Loading pyRCX 2.5, checking settings\r\n"
+	print("*** Loading pyRCX 3.0.0, checking settings\r\n")
 
 	if pyRCXsetup() == 0:
-		print "*** please run pyRCXsetup.py first to configure pyRCX"
+		print("*** please run pyRCXsetup.py first to configure pyRCX")
 		return 0
 
 	settings()
 
 	rehash(0)
 
-	print "*** Setting UTC through NTP, current server is: " + NTPServer + ":(123)\r\n"
+	print("*** Setting UTC through NTP, current server is: " + NTPServer + ":(123)\r\n")
 
 	NTPtime = GetUTC_NTP()
 
 	if NTPtime == 0:
-		print "*** NTP is not set, possibly due to connection error.. your timing could be inaccurate, please do not link this server\r\n"
+		print("*** NTP is not set, possibly due to connection error.. your timing could be inaccurate, please do not link this server\r\n")
 		NTPtime = int(time.time())
 	else:
-		print "*** UTC time has been synchronised..\r\n"
+		print("*** UTC time has been synchronised..\r\n")
 	
 	timeDifference = NTPtime - int(time.time())
 
-	print "*** Settings loaded, now trying to start your server on the ports you specified\r\n"
+	print("*** Settings loaded, now trying to start your server on the ports you specified\r\n")
 
 	rehash()
 	#global NickservParam
 
 	if NickservParam == "":
-		raise Exception, "Cannot run server without Nickserv security, please add an n:line to your config"
-	while True:
+		raise Exception("Cannot run server without Nickserv security, please add an n:line to your config")
+
+	while True:
 		time.sleep(50)
 
-if __name__ == '__main__':
-	if hasattr(os,"fork"):
+main()
 
-		try: 
-			pid = os.fork() 
-			if pid > 0: sys.exit(0) 
-		except OSError: 
-			sys.exit(1)
+# if __name__ == '__main__':
+# 	if hasattr(os,"fork"):
 
-		os.setsid()
-		os.umask(0)
-		try: 
-        		pid = os.fork() 
-			if pid > 0:
-				sys.exit(0)
+# 		try: 
+# 			pid = os.fork() 
+# 			if pid > 0: sys.exit(0) 
+# 		except OSError: 
+# 			sys.exit(1)
 
-		except OSError: 
-			sys.exit(1)
+# 		os.setsid()
+# 		os.umask(0)
+
+# 		try: 
+# 			pid = os.fork() 
+# 			if pid > 0:
+# 				sys.exit(0)
+
+# 		except OSError: 
+# 			sys.exit(1)
 			
-	else:
-		pass
+# 	else:
+# 		pass
 	
-	main()
+# 	main()
