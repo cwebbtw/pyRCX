@@ -4,29 +4,21 @@ import threading
 
 from random import random
 
-import socket
-import re
-
-import time
-
+import logging
 import os
+import re
+import socket
+import sys
+import time
 
 # Select module
 
 from select import select
 from copy import copy
 
-#error reporting20/06/2007
- 
-import sys
-
+from hashlib import sha256
 from traceback import extract_tb
 
-#link hashing
-
-from hashlib import sha256
-
-# link compression
 try:
 	from zlib import compress,decompress
 except ImportError: # compression isn't mandatory but linking servers must support linking
@@ -39,19 +31,14 @@ except ImportError: # compression isn't mandatory but linking servers must suppo
 	def decompress(blah):
 		return blah
 
-# link object serialization
-
 from pickle import dumps,loads
 
 # link NTP
-
 from struct import unpack
 
 # Nickserv
 
 #Here are some settings, these can be coded into the conf later I suppose
-
-
 
 BotFile = ""
 DefaultModes = "ntl 75"
@@ -88,6 +75,8 @@ NTPtime = 0
 timeDifference = 0
 NTPServer = ""
 
+MaxGlobal = 0
+MaxLocal = 0
 
 Ports = []
 FloodingExempt = []
@@ -113,6 +102,8 @@ channels = {}
 currentports = {}
 Disabled = {}
 NickservIPprotection = True
+
+writeUsers_lock = False
 
 # L:<method>:<server name>:<server address>:<port>:<password>:<info>;
 
@@ -1425,21 +1416,12 @@ def GetUsers():
 	try:
 		if rdata != "":
 			Nickserv = loads(decompress(rdata))
-			#Nickserv = pickle.loads(rdata)
 	except:
 		raise IOError("Could not load Nickserv database, possibly because it is corrupted")
 
 	myfile.close()
 
 	return (localusers.strip(),globalusers.strip())
-
-readl = GetUsers()
-
-MaxGlobal = readl[1]
-MaxLocal = readl[0]
-
-
-writeUsers_lock = False
 
 def WriteUsers(localusers,globalusers,nicksv=True,chans=True,access=False):
 	global writeUsers_lock
@@ -1476,7 +1458,7 @@ def WriteUsers(localusers,globalusers,nicksv=True,chans=True,access=False):
 
 
 def rehash(par=1): # this information will be rehashed by any operator with level 4 privlidges (Administrator)
-	myfile = open("pyRCX.conf", "r")
+	myfile = open("conf/pyRCX.conf", "r")
 	try:
 		global ServerAddress,ServerName,NetworkName,connectionsExempt,operlines,profanity,Ports,Disabled
 		global Filter,FloodingExempt,MaxUsers,MaxUsersPerConnection,servers,NickfloodAmount,NickfloodWait
@@ -3234,7 +3216,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 		raw(self,"004",self._nickname,NetworkName)
 		raw(self,"005",self._nickname)
 		self._sendlusers()
-		self._sendmotd("./motd.conf")
+		self._sendmotd("./conf/motd.conf")
 
 		if self._MODE_register:
 			self._MODE_register = False
@@ -5446,7 +5428,7 @@ class ClientConnecting(threading.Thread,ClientBaseClass):
 
 									elif param[0] == "MOTD":
 										try:
-											self._sendmotd("./motd.conf")
+											self._sendmotd("./conf/motd.conf")
 										except:
 											pass
 
@@ -6765,8 +6747,9 @@ def Mode_function(self,param,strdata=""):
 		raw(self,"401",self._nickname,param[1])
 
 def Nickserv_function(self,param,msgtype=""):
-	try:
+	logger = logging.getLogger('NICKSERV')
 
+	try:
 		replyType = "NOTICE"
 
 		if msgtype != "":
@@ -6787,14 +6770,13 @@ def Nickserv_function(self,param,msgtype=""):
 					self.send(":%s!%s@%s %s %s :Error: NickServ will not allow nicknames to be registered at this time\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname))
 					sendNickservOpers("Notice -- \x02NickServ\x02 - (%s!%s@%s) [%s] has tried to registered their nickname (nickserv disabled, defcon 3 is active)\r\n" % (self._nickname,self._username,self._hostmask,self.details[0]))
 				else:
-
 					passw = param[2]
 					emaila = param[3]
 					checkemail = emaila.split("@")[1].split(".")[1]
 					toomanynicks = 0
 					exemptFromConnectionKiller = False
-					for regnicks in Nickserv:
-						mydetails_obj = Nickserv[regnicks.lower()]
+					for registered_nicknames in Nickserv:
+						mydetails_obj = Nickserv[registered_nicknames.lower()]
 						mydetails = mydetails_obj._details
 						if mydetails == self.details[0]:
 							toomanynicks+=1
@@ -6833,6 +6815,7 @@ def Nickserv_function(self,param,msgtype=""):
 						writehash = sha256((passw + NickservParam).encode('utf-8'))
 
 						Nickserv[self._nickname.lower()] = NickServ(self._nickname,writehash.hexdigest(),emaila,GetEpochTime(),self.details[0],"",olevel,False) #add to the nickname database
+
 						self.send(":%s!%s@%s %s %s :\x02Registration complete\x02\r\n:%s!%s@%s %s %s :Your nickname has been registered with the address *@%s\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname,"NickServ","NickServ",NetworkName,replyType,self._nickname,self._hostmask))
 						self.send(":%s!%s@%s %s %s :Your password is \x02%s\x02, please remember to keep this safe\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname,passw))
 						self._MODE_register = True
@@ -6842,8 +6825,9 @@ def Nickserv_function(self,param,msgtype=""):
 						if "r" not in self._MODE_: self._MODE_ += "r"
 						self.send(":%s!%s@%s MODE %s +r\r\n" % ("NickServ","NickServ",NetworkName,self._nickname))
 						sendNickservOpers("Notice -- \x02NickServ\x02 - (%s!%s@%s) [%s] has registered their nickname\r\n" % (self._nickname,self._username,self._hostmask,self.details[0]))
-							
-			except:
+
+			except Exception as exception:
+				logger.debug(exception)
 				self.send(":%s!%s@%s %s %s :Syntax: \x02REGISTER \x1Fpassword\x1F \x1Femail\x1F\x02\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname))
 		
 		elif param[1] == "HELLO":
@@ -7425,6 +7409,7 @@ def SetupListeningSockets():
 			currentports[p] = ServerListen(p).start()
 
 def main():
+	logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 	
 	print(" _____  __    __  _____    _____  __    __ ")
 	print("|  _  \ \ \  / / |  _  \  /  ___| \ \  / / ")
@@ -7441,7 +7426,13 @@ def main():
 	print("__________________________________________")
 	print("")
 
-	global timeDifference
+	# TODO fix use of global
+	global timeDifference,MaxGlobal,MaxLocal
+
+	readl = GetUsers()
+
+	MaxGlobal = readl[1]
+	MaxLocal = readl[0]
 
 	print("*** Loading pyRCX 3.0.0, checking settings\r\n")
 
@@ -7468,6 +7459,7 @@ def main():
 	print("*** Settings loaded, now trying to start your server on the ports you specified\r\n")
 
 	rehash()
+
 	#global NickservParam
 
 	if NickservParam == "":
@@ -7476,7 +7468,8 @@ def main():
 	while True:
 		time.sleep(50)
 
-main()
+if __name__ == '__main__':
+	main()
 
 # if __name__ == '__main__':
 # 	if hasattr(os,"fork"):
