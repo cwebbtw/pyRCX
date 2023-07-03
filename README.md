@@ -6,7 +6,15 @@ A pure python IRCX (https://www.ietf.org/archive/id/draft-pfenning-irc-extension
 
 Run the main file to start the server
 
-python3 main.py
+`python start.py`
+
+### Tests
+
+`python -m unittest`
+
+### Dependencies
+
+None yet
 
 ## Contributors
 
@@ -17,7 +25,6 @@ There is currently no contributors guide as the code needs a considerable amount
 ## License
 
 Apache 2.0
-
 
 ## Credits
 

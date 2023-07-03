@@ -36,7 +36,7 @@ from pickle import dumps,loads
 # link NTP
 from struct import unpack
 
-# Nickserv
+from .nickserv import NickServEntry
 
 #Here are some settings, these can be coded into the conf later I suppose
 
@@ -1354,18 +1354,6 @@ class Link(threading.Thread):
 		self.link._use = False
 
 # End of linking
-		
-class NickServ:
-	def __init__(self,nick,passw,emaila,registrationtime,ip,vhost,level,showmail=False):
-		self._nickname = nick
-		self._groupnick = []
-		self._password = passw
-		self._email = emaila
-		self._registrationtime = registrationtime
-		self._details = ip
-		self._vhost = vhost
-		self._level = int(level)
-		self._showemail = showmail
 
 class Oper:
 
@@ -1397,7 +1385,7 @@ def stripx01(badstring):
 def GetUsers():
 	logger = logging.getLogger('USERS')
 
-	myfile = open("database/users.dat","r")
+	myfile = open("pyRCX/database/users.dat","r")
 	l = 1
 	localusers = 0
 	globalusers = 0
@@ -1412,7 +1400,7 @@ def GetUsers():
 
 	myfile.close()
 
-	myfile = open("database/Nickserv.dat","rb")
+	myfile = open("pyRCX/database/Nickserv.dat","rb")
 	global Nickserv
 	rdata = myfile.read()
 	try:
@@ -1431,16 +1419,16 @@ def WriteUsers(localusers,globalusers,nicksv=True,chans=True,access=False):
 	if writeUsers_lock == False:
 		writeUsers_lock = True
 		try:
-			myfile = open("database/users.dat","w")
+			myfile = open("pyRCX/database/users.dat","w")
 			myfile.write("%s\r\n%s" % (localusers,globalusers))
 			myfile.close()
 			if nicksv:
-				myfile = open("database/Nickserv.dat","wb")
+				myfile = open("pyRCX/database/Nickserv.dat","wb")
 				myfile.write(compress(dumps(Nickserv)))
 				myfile.close()
 
 			if chans:
-				myfile = open("database/channels.dat","wb")
+				myfile = open("pyRCX/database/channels.dat","wb")
 				schan = copy(channels)
 				for each in schan:
 					chanid = channels[each.lower()]
@@ -1450,7 +1438,7 @@ def WriteUsers(localusers,globalusers,nicksv=True,chans=True,access=False):
 				myfile.close()
 
 			if access:
-				myfile = open("database/access.dat","wb")
+				myfile = open("pyRCX/database/access.dat","wb")
 				myfile.write(dumps(ServerAccess))
 				myfile.close()
 		except:
@@ -1461,7 +1449,7 @@ def WriteUsers(localusers,globalusers,nicksv=True,chans=True,access=False):
 
 
 def rehash(par=1): # this information will be rehashed by any operator with level 4 privlidges (Administrator)
-	myfile = open("conf/pyRCX.conf", "r")
+	myfile = open("pyRCX/conf/pyRCX.conf", "r")
 	try:
 		global ServerAddress,ServerName,NetworkName,connectionsExempt,operlines,profanity,Ports,Disabled
 		global Filter,FloodingExempt,MaxUsers,MaxUsersPerConnection,servers,NickfloodAmount,NickfloodWait
@@ -6817,7 +6805,7 @@ def Nickserv_function(self,param,msgtype=""):
 						
 						writehash = sha256((passw + NickservParam).encode('utf-8'))
 
-						Nickserv[self._nickname.lower()] = NickServ(self._nickname,writehash.hexdigest(),emaila,GetEpochTime(),self.details[0],"",olevel,False) #add to the nickname database
+						Nickserv[self._nickname.lower()] = NickServEntry(self._nickname,writehash.hexdigest(),emaila,GetEpochTime(),self.details[0],"",olevel,False) #add to the nickname database
 
 						self.send(":%s!%s@%s %s %s :\x02Registration complete\x02\r\n:%s!%s@%s %s %s :Your nickname has been registered with the address *@%s\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname,"NickServ","NickServ",NetworkName,replyType,self._nickname,self._hostmask))
 						self.send(":%s!%s@%s %s %s :Your password is \x02%s\x02, please remember to keep this safe\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname,passw))
@@ -7272,7 +7260,7 @@ def Nickserv_function(self,param,msgtype=""):
 
 
 def settings(): # this is information such as channels, max users etc
-	myfile = open('database/channels.dat','rb')
+	myfile = open('pyRCX/database/channels.dat','rb')
 	for lineStr in myfile.readlines():
 		s_line = lineStr.split("\x01")
 		if s_line[0].split("=")[0].upper() == "C":
@@ -7304,7 +7292,7 @@ def settings(): # this is information such as channels, max users etc
 
 	global ServerAccess
 
-	myfile = open('database/access.dat','rb')
+	myfile = open('pyRCX/database/access.dat','rb')
 	try:
 		ServerAccess = loads(myfile.read())
 	except EOFError:
@@ -7376,24 +7364,24 @@ def GetEpochTime():
 	# + timeDifference
 
 def pyRCXsetup():
-	if os.path.isfile("database/channels.dat") == False: 
+	if os.path.isfile("pyRCX/database/channels.dat") == False: 
 		print("*** Could not find channels file, creating new channel file")
 		createfile = open("database/channels.dat","w")
 		createfile.close()
 
-	if os.path.isfile("database/access.dat") == False: 
+	if os.path.isfile("pyRCX/database/access.dat") == False: 
 		print("*** Could not find access file, setting up access file")
-		createfile = open("database/access.dat","w")
+		createfile = open("pyRCX/database/access.dat","w")
 		createfile.close()
 
-	if os.path.isfile("database/Nickserv.dat") == False: 
+	if os.path.isfile("pyRCX/database/Nickserv.dat") == False: 
 		print("*** Could not find Nickserv database, installing Nickserv")
-		createfile = open("database/Nickserv.dat","w")
+		createfile = open("pyRCX/database/Nickserv.dat","w")
 		createfile.close()
 
-	if os.path.isfile("database/users.dat") == False: 
+	if os.path.isfile("pyRCX/database/users.dat") == False: 
 		print("*** Could not find previous historic user counts, history being setup")
-		createfile = open("database/access.dat","w")
+		createfile = open("pyRCX/database/access.dat","w")
 		createfile.write("1\n1\n")
 		createfile.close()
 		
@@ -7405,7 +7393,7 @@ def SetupListeningSockets():
 		if p not in currentports: # If the port isn't already running, set it up, old ports will automatically timeout after five seconds
 			currentports[p] = ServerListen(p).start()
 
-def main():
+def start():
 	logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 	
 	print(" _____  __    __  _____    _____  __    __ ")
@@ -7416,10 +7404,7 @@ def main():
 	print("|_|      /_/     |_|  \_\ \_____| /_/  \_\ v3.0.0")
 	print("__________________________________________")
 	print("")
-	print("* Developed by chrisjw")
-	print("* Bug fixes and recommendations, see /CREDITS")
-	print("* Python: www.python.org")
-	print("* IRC:    irc.freenode.org")
+	print("* GitHub: https://github.com/cwebbtw/pyRCX")
 	print("__________________________________________")
 	print("")
 
@@ -7462,9 +7447,6 @@ def main():
 
 	while True:
 		time.sleep(50)
-
-if __name__ == '__main__':
-	main()
 
 # if __name__ == '__main__':
 # 	if hasattr(os,"fork"):

@@ -2,7 +2,7 @@ import logging
 import unittest
 import sys
 
-from pyRCX import main
+from pyRCX import server
 
 class NickServTest(unittest.TestCase):
     """
@@ -17,7 +17,7 @@ class NickServTest(unittest.TestCase):
     def test_register_creates_registered_nickname(self):
 
         # Given
-        client = main.ClientConnecting(None, ["details1"], None)
+        client = server.ClientConnecting(None, ["details1"], None)
         client._username = "~ABCDE0123456789"
         client._nickname = "sample_nickname1"
 
@@ -27,9 +27,9 @@ class NickServTest(unittest.TestCase):
         message_type = "PRIVMSG"
 
         # When
-        main.Nickserv_function(client, parameters, message_type)
+        server.Nickserv_function(client, parameters, message_type)
 
-        nickserv_entry = main.Nickserv[client._nickname]
+        nickserv_entry = server.Nickserv[client._nickname]
 
         # Then
         self.assertEqual(nickserv_entry._email, email)
@@ -39,23 +39,23 @@ class NickServTest(unittest.TestCase):
         # Given
         group_owner_nickname = "sample_nickname2"
 
-        client = main.ClientConnecting(None, ["details2"], None)
+        client = server.ClientConnecting(None, ["details2"], None)
         client._username = "~ABCDE0123456789"
         client._nickname = group_owner_nickname
 
         parameters = ["NICKSERV", "REGISTER", "password", "email2@email.com"]
         message_type = "PRIVMSG"
 
-        main.Nickserv_function(client, parameters, message_type)
+        server.Nickserv_function(client, parameters, message_type)
 
         client._nickname = "sample_nickname3"
 
         parameters = ["NICKSERV", "GROUP", group_owner_nickname, "password"]
 
         # When
-        main.Nickserv_function(client, parameters, message_type)
+        server.Nickserv_function(client, parameters, message_type)
 
-        nickserv_entry = main.Nickserv[group_owner_nickname]
+        nickserv_entry = server.Nickserv[group_owner_nickname]
 
         # Then
         self.assertEqual(nickserv_entry._groupnick, [client._nickname])
@@ -63,23 +63,23 @@ class NickServTest(unittest.TestCase):
     def test_identify_registered_nickname(self):
 
         # Given
-        client = main.ClientConnecting(None, ["details3"], None)
+        client = server.ClientConnecting(None, ["details3"], None)
         client._username = "~ABCDE0123456789"
         client._nickname = "sample_nickname4"
 
         parameters = ["NICKSERV", "REGISTER", "password", "email3@email.com"]
         message_type = "PRIVMSG"
 
-        main.Nickserv_function(client, parameters, message_type)
+        server.Nickserv_function(client, parameters, message_type)
 
-        client = main.ClientConnecting(None, ["details3"], None)
+        client = server.ClientConnecting(None, ["details3"], None)
         client._username = "~ABCDE0123456789"
         client._nickname = "sample_nickname4"
 
         parameters = ["NICKSERV", "IDENTIFY", "password"]
 
         # When
-        main.Nickserv_function(client, parameters, message_type)
+        server.Nickserv_function(client, parameters, message_type)
 
         # Then
         self.assertTrue(client._MODE_register)
@@ -87,23 +87,23 @@ class NickServTest(unittest.TestCase):
     def test_identify_registered_nickname_with_invalid_password(self):
 
         # Given
-        client = main.ClientConnecting(None, ["details3"], None)
+        client = server.ClientConnecting(None, ["details3"], None)
         client._username = "~ABCDE0123456789"
         client._nickname = "sample_nickname4"
 
         parameters = ["NICKSERV", "REGISTER", "password", "email3@email.com"]
         message_type = "PRIVMSG"
 
-        main.Nickserv_function(client, parameters, message_type)
+        server.Nickserv_function(client, parameters, message_type)
 
-        client = main.ClientConnecting(None, ["details3"], None)
+        client = server.ClientConnecting(None, ["details3"], None)
         client._username = "~ABCDE0123456789"
         client._nickname = "sample_nickname4"
 
         parameters = ["NICKSERV", "IDENTIFY", "wrongpassword"]
 
         # When
-        main.Nickserv_function(client, parameters, message_type)
+        server.Nickserv_function(client, parameters, message_type)
 
         # Then
         self.assertFalse(client._MODE_register)
