@@ -6895,7 +6895,7 @@ def Nickserv_function(self,param,msgtype=""):
 
 		elif param[1] == "IDENTIFY":
 			try:
-				if self._MODE_register == True:
+				if self._MODE_register:
 					self.send(":%s!%s@%s %s %s :Error: You are already identified\r\n" % ("NickServ","NickServ",NetworkName,replyType,self._nickname))
 				else:
 					passw = param[2]
