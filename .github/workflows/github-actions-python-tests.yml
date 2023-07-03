@@ -1,0 +1,11 @@
+name: Python Tests
+run-name: Test
+on: [push]
+jobs:
+  Test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Test
+        run: cd ${{ github.workspace }} && python -m unittest
