@@ -1,5 +1,7 @@
 # pyRCX 
 
+![Tests](https://github.com/cwebbtw/pyRCX/actions/workflows/github-actions-python-tests.yml/badge.svg)
+
 A pure python IRCX (https://www.ietf.org/archive/id/draft-pfenning-irc-extensions-04.txt) server originally written with Python 2.3
 
 ## Usage
