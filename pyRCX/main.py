@@ -1395,6 +1395,8 @@ def stripx01(badstring):
 
 
 def GetUsers():
+	logger = logging.getLogger('USERS')
+
 	myfile = open("database/users.dat","r")
 	l = 1
 	localusers = 0
@@ -1417,7 +1419,8 @@ def GetUsers():
 		if rdata != "":
 			Nickserv = loads(decompress(rdata))
 	except:
-		raise IOError("Could not load Nickserv database, possibly because it is corrupted")
+		logger.warning("Could not load Nickserv database, possibly because it is corrupted")
+		Nickserv = {}
 
 	myfile.close()
 
@@ -7377,28 +7380,22 @@ def pyRCXsetup():
 		print("*** Could not find channels file, creating new channel file")
 		createfile = open("database/channels.dat","w")
 		createfile.close()
-		return 0
 
 	if os.path.isfile("database/access.dat") == False: 
 		print("*** Could not find access file, setting up access file")
 		createfile = open("database/access.dat","w")
 		createfile.close()
-		return 0
 
 	if os.path.isfile("database/Nickserv.dat") == False: 
 		print("*** Could not find Nickserv database, installing Nickserv")
 		createfile = open("database/Nickserv.dat","w")
 		createfile.close()
-		return 0
 
 	if os.path.isfile("database/users.dat") == False: 
 		print("*** Could not find previous historic user counts, history being setup")
 		createfile = open("database/access.dat","w")
 		createfile.write("1\n1\n")
 		createfile.close()
-		return 0
-
-	return 1
 		
 
 def SetupListeningSockets():
@@ -7429,16 +7426,14 @@ def main():
 	# TODO fix use of global
 	global timeDifference,MaxGlobal,MaxLocal
 
+	print("*** Loading pyRCX 3.0.0, checking settings\r\n")
+
+	pyRCXsetup()
+
 	readl = GetUsers()
 
 	MaxGlobal = readl[1]
 	MaxLocal = readl[0]
-
-	print("*** Loading pyRCX 3.0.0, checking settings\r\n")
-
-	if pyRCXsetup() == 0:
-		print("*** please run pyRCXsetup.py first to configure pyRCX")
-		return 0
 
 	settings()
 
