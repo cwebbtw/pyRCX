@@ -12,7 +12,6 @@ class NickServEntry:
                  virtual_host: str,
                  level: int,
                  show_email: str = False):
-
         self.grouped_nicknames = []
         self.registration_time = registration_time
         self.show_email = show_email
