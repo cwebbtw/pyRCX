@@ -29,7 +29,7 @@ class NickServTest(unittest.TestCase):
         # When
         server.Nickserv_function(client, parameters, message_type)
 
-        nickserv_entry = server.Nickserv[client._nickname]
+        nickserv_entry = server.nickserv_entries[client._nickname]
 
         # Then
         self.assertEqual(nickserv_entry._email, email)
@@ -55,7 +55,7 @@ class NickServTest(unittest.TestCase):
         # When
         server.Nickserv_function(client, parameters, message_type)
 
-        nickserv_entry = server.Nickserv[group_owner_nickname]
+        nickserv_entry = server.nickserv_entries[group_owner_nickname]
 
         # Then
         self.assertEqual(nickserv_entry.grouped_nicknames, [client._nickname])
