@@ -18,6 +18,7 @@ from copy import copy
 
 from hashlib import sha256
 from traceback import extract_tb
+from typing import Dict
 
 try:
     from zlib import compress, decompress
@@ -37,6 +38,12 @@ from pickle import dumps, loads
 from struct import unpack
 
 from .nickserv import NickServEntry
+from .operator import OperatorEntry
+
+# TODO extract this into the configuration class along with the rehash behaviour
+from .filtering import FilterEntry, Filtering
+
+filtering: Filtering = Filtering()
 
 # Here are some settings, these can be coded into the conf later I suppose
 
@@ -82,7 +89,6 @@ Ports = []
 FloodingExempt = []
 profanity = []
 temp_noopers = []
-Filter = []
 operlines = []
 connections = []
 invisible = []
@@ -97,7 +103,7 @@ createmute = {}
 nickmute = {}
 Nickserv = {}
 nicknames = {}
-opers = {}
+opers: Dict[str, OperatorEntry] = {}
 channels = {}
 currentports = {}
 Disabled = {}
@@ -108,7 +114,6 @@ writeUsers_lock = False
 # L:<method>:<server name>:<server address>:<port>:<password>:<info>;
 
 # servers.append(ServerInformation(s_line[1],s_line[2],s_line[3],s_line[4],s_line[5],s_line[6]))
-
 
 class ServerInformation:
     def __init__(self, method, serverName, serverAddress, port, password, info):
@@ -125,22 +130,6 @@ class ServerInformation:
         self._use = False
         self._close = False
         self._authenticated = False
-
-
-class LinkOpers:
-    operlevel = 0
-    guide = False
-    hidden = False
-    watchserver = False
-    watchbans = False
-    watchnickserv = False
-    usage = False
-
-    def __init__(self, username, password, flags, filename):
-        self.username = username
-        self.password = password
-        self.flags = flags
-        self.filename = filename
 
 
 class ChannelBaseClass:
@@ -1536,31 +1525,6 @@ class Link(threading.Thread):
 # End of linking
 
 
-class Oper:
-
-    operlevel = 0
-    guide = False
-    hidden = False
-    watchserver = False
-    watchbans = False
-    watchnickserv = False
-    usage = False
-
-    def __init__(self, username, password, flags, filename):
-        self.username = username
-        self.password = password
-        self.flags = flags
-        self.filename = filename
-
-
-class filters:
-
-    def __init__(self, level, filterword, override):
-        self.level = level
-        self.filterword = filterword
-        self.override = override
-
-
 def stripx01(badstring):
     return badstring.replace("\x01", "")
 
@@ -1641,7 +1605,7 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
     myfile = open("pyRCX/conf/pyRCX.conf", "r")
     try:
         global ServerAddress, ServerName, NetworkName, connectionsExempt, operlines, profanity, Ports, Disabled
-        global Filter, FloodingExempt, MaxUsers, MaxUsersPerConnection, servers, NickfloodAmount, NickfloodWait
+        global FloodingExempt, MaxUsers, MaxUsersPerConnection, servers, NickfloodAmount, NickfloodWait
         global NickservParam, NTPServer, ipaddress, ServerAdmin1, ServerAdmin2, AdminPassword, ServerPassword
         global passmsg, HostMaskingParam, HostMasking, PrefixChar, MaxServerEntries, MaxChannelEntries, MaxUserEntries
         global DefaultModes, MaxChannels, MaxChannelsPerUser, ChanPrefix, defconMode, ChanLockDown, UserDefaultModes
@@ -1650,12 +1614,14 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
         profanity = []
         Ports = []
         Disabled = {}
-        Filter = []
         FloodingExempt = []
         connectionsExempt = []
         servers = []
 
         line_num = 0
+
+        # TODO this does not fix an existing race condition where the filters may be bypassed whilst a rehash is occurring
+        filtering.clear_filters()
 
         for lineStr in myfile.readlines():
 
@@ -1764,21 +1730,19 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
 
             if lineStr[0] == "O":
                 s_line = lineStr.split(":")
-                operlines.append(Oper(s_line[1], s_line[2], s_line[3], s_line[4].split(";")[0]))
+                operlines.append(OperatorEntry(s_line[1], s_line[2], s_line[3], s_line[4].split(";")[0]))
 
             if lineStr[0] == "F":
                 s_line = lineStr.split(":")
                 if s_line[1] == "profanity":
+                    # TODO this should really just be part of the filtering still not another global variable
                     profanity.append(s_line[2])
                 else:
-                    Filter.append(filters(s_line[1], s_line[2], s_line[3].split(";")[0]))
+                    filtering.add_filter(FilterEntry(s_line[1], s_line[2], s_line[3].split(";")[0]))
 
             lineStr = myfile.readline()
 
         myfile.close()
-
-        if par == 1:
-            SetupListeningSockets()
     except:
         tuError = sys.exc_info()
         _lastError.append([tuError, [time.strftime("%a %b %d %H:%M:%S %Y GMT", time.localtime()),
@@ -2519,20 +2483,6 @@ def compilemodestr(modes, chan=False):
         il += 1
 
     return retval
-
-
-def _filter(cid, text, param):
-    for each in Filter:
-        if cid._nickname.lower() in opers and each.filterword.lower() in text.lower():
-            opid = opers[cid._nickname.lower()]
-            if str(opid.operlevel) >= str(each.override) and str(each.override) != str(0) and param == each.level:
-                return True
-
-        if each.filterword.lower() in text.lower() and param == each.level:
-            return False
-
-    return True
-
 
 class Prop:
     def __init__(self, name, account):
@@ -3298,10 +3248,12 @@ class Channel(ChannelBaseClass):
     def __validate(self, channelname, joinuser):
         chanprefix = "(" + "|".join(ChanPrefix.split(",")) + ")"
         p = re.compile(f"^{chanprefix}[\u0021-\u002B\u002E-\u00FF\-]{{0,128}}$")
-        if p.match(channelname) == None or _filter(nicknames[joinuser.lower()], channelname, "chan") == False:
-            return False
-        else:
-            return True
+
+        operator_level = 0
+        if joinuser.lower() in opers:
+            operator_level = opers[joinuser.lower()].operlevel
+
+        return p.match(channelname) == None or not filtering.filter(channelname, "chan", operator_level)
 
     def __init__(self, channelname, joinuser, creationmodes=""):
         ChannelBaseClass.__init__(self)
@@ -3867,7 +3819,6 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                     # end of readline code
 
                     if closesock:
-                        print("breaking lol")
                         break
 
                     if len(strdata) >= 480:
@@ -4134,7 +4085,6 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         if cid:
                                             if copid:
                                                 copid = opers[cid._nickname.lower()]
-                                                # I don't want opers wars now
                                                 if copid.operlevel > opid.operlevel and param[1].lower() != self._nickname.lower():
                                                     raw(self, "481", self._nickname,
                                                         "Permission Denied - You do not have the correct privileges to kill this oper")
@@ -4294,18 +4244,21 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 self.send(":" + ServerName +
                                                           " NOTICE STATS :*** Viewing Filter statistics '" +
                                                           param[1][0] + "' \r\n")
-                                                for f in Filter:
-                                                    if f.level == "chan":
-                                                        self.send(
-                                                            ":" + ServerName + " 212 " + self._nickname + " :Channel filter - '" + f.filterword + "' - Level " + f.override + " overrides\r\n")
+                                                
+												# TODO violating encapsulation of filters still
+                                                for f in filtering._filters:
+                                                    if f.filter_type == "chan":
+                                                        self.send(":" + ServerName + " 212 " + self._nickname +
+                                                                  " :Channel filter - '" + f.filter_string + "' - Level "
+                                                                  + f.override + " overrides\r\n")
                                                     elif f.level == "nick":
                                                         self.send(":" + ServerName + " 212 " + self._nickname +
-                                                                  " :Nickname filter - '" + f.filterword + "' - Level " +
-                                                                  f.override + " overrides\r\n")
-                                                    elif f.level == "profanity":
+                                                                  " :Nickname filter - '" + f.filter_string +
+                                                                  "' - Level " + f.override + " overrides\r\n")
+                                                    elif f.filter_type == "profanity":
                                                         self.send(":" + ServerName + " 212 " + self._nickname +
-                                                                  " :Profanity filter - '" + f.filterword + "' - Level " +
-                                                                  f.override + " overrides\r\n")
+                                                                  " :Profanity filter - '" + f.filter_string +
+                                                                  "' - Level " + f.override + " overrides\r\n")
 
                                             elif param[1] == "D":
                                                 self.send(":" + ServerName +
@@ -6554,9 +6507,12 @@ def Oper_function(self, param):
                     raw(self, "491", self._nickname, "No O-lines for your host")
 
 
-def Nick_function(self, param):
+def Nick_function(self: ClientConnecting, param):
+    operator_level = 0
+    if self._nickname.lower() in opers:
+        operator_level = opers[self._nickname.lower()].operlevel
 
-    if self._validate(param[1].replace(':', '')) and _filter(self, param[1].replace(':', ''), "nick"):
+    if self._validate(param[1].replace(':', '')) and not filtering.filter(param[1].replace(':', ''), "nick", operator_level):
 
         if int((GetEpochTime() - self._nickflood)*1000) <= 10000:
             self._nickamount += 1
@@ -8717,8 +8673,6 @@ def start():
 
     settings()
 
-    rehash(0)
-
     print("*** Setting UTC through NTP, current server is: " + NTPServer + ":(123)\r\n")
 
     NTPtime = GetUTC_NTP()
@@ -8734,6 +8688,8 @@ def start():
     print("*** Settings loaded, now trying to start your server on the ports you specified\r\n")
 
     rehash()
+
+    SetupListeningSockets()
 
     # global NickservParam
 

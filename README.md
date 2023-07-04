@@ -4,6 +4,74 @@
 
 A pure python IRCX (https://www.ietf.org/archive/id/draft-pfenning-irc-extensions-04.txt) server originally written with Python 2.3
 
+## Documentation
+
+Documentation is currently limited and needs to be improved:
+
+### Backwards compatibility
+
+Clients that do not send IRCX will be treated as IRCII compatibility.
+
+### User modes supported
+
+Standard user modes for IRCX should be supported however additional modes are also supported.
+
+abAfghiInoOpPrwzX
+
+(documentation should include the behaviour for each mode)
+
+### Channel modes supported
+
+Standard channel modes for IRCX should be supported however additional modes are also supported.
+
+aAbcCdefGhikKlmMnNopPqQrRsStTuvwxXZ
+
+(documentation should include the behaviour for each mode)
+
+### Properties supported
+
+Prop supports channel properties of:
+
+- CLIENT
+- HOSTKEY
+- LAG
+- LANGUAGE
+- MEMBERKEY
+- ONJOIN
+- ONPART
+- OWNERKEY
+- RESET
+- SUBJECT
+- TOPIC
+
+### Access supported
+
+Access supports add, deny, list and clear at channel, user and server levels:
+
+- VOICE
+- GRANT
+- HOST
+- OWNER
+
+Additional REGISTER access is provided with a founder mode which diverts from the IRCX rfc but provides
+a mechanism for a registered channel to be assigned to a registered nickname.
+
+### NickServ
+
+This server supports nickserv and has the following behaviour
+
+- REGISTER
+- IDENTIFY
+- GHOST
+- INFO
+- DROP
+- GROUP/UNGROUP
+- SET
+- DEFCON
+- IPLOCK
+
+Note that ChanServ is not supported and should not be required given ACCESS and PROP.
+
 ## Usage
 
 Run the main file to start the server
