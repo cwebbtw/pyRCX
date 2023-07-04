@@ -2,9 +2,7 @@ class OperatorEntry:
     """
     Represents an operator entry parsed from configuration
     """
-
-    operator_level: int = 0
-
+    
     guide = False
     hidden = False
     watchserver = False
@@ -17,3 +15,5 @@ class OperatorEntry:
         self.password = password
         self.flags = flags
         self.filename = filename
+
+        self.operator_level: int = 0

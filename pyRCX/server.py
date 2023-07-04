@@ -18,7 +18,7 @@ from copy import copy
 
 from hashlib import sha256
 from traceback import extract_tb
-from typing import Dict
+from typing import Dict, List
 
 try:
     from zlib import compress, decompress
@@ -40,15 +40,19 @@ from struct import unpack
 from .nickserv import NickServEntry
 from .operator import OperatorEntry
 from .filtering import FilterEntry, Filtering
+from .access import AccessInformation
 
 filtering: Filtering = Filtering()
 
 nickserv_entries: Dict[str, NickServEntry] = {}
 operator_entries: Dict[str, OperatorEntry] = {}
 
+ServerAccess: List[AccessInformation] = []
+
 # Here are some settings, these can be coded into the conf later I suppose
 
-BotFile = ""
+character_encoding = "cp1252"
+
 DefaultModes = "ntl 75"
 
 NickfloodAmount = 5
@@ -96,8 +100,6 @@ invisible = []
 unknownConnections = []
 connectionsExempt = []
 opersecret = []
-ServerAccess = []
-
 createmute = {}
 nickmute = {}
 nicknames = {}
@@ -117,8 +119,6 @@ class ServerInformation:
         self._serverAddress = serverAddress
         self._port = int(port)
         self._password = password
-
-        self._linkfail = 0
 
         self._use = False
         self._close = False
@@ -916,6 +916,8 @@ def GetUsers():
 
 
 def WriteUsers(localusers, globalusers, nicksv=True, chans=True, access=False):
+    logger = logging.getLogger('PERSISTENCE')
+
     global writeUsers_lock
     if writeUsers_lock == False:
         writeUsers_lock = True
@@ -933,14 +935,14 @@ def WriteUsers(localusers, globalusers, nicksv=True, chans=True, access=False):
                 schan = copy(channels)
                 for each in schan:
                     chanid = channels[each.lower()]
-                    if chanid.MODE_registered == True:
+                    if chanid.MODE_registered:
                         myfile.write(
-                            "C=%s\x01=%s\x01=%s\x01=%s\x01=%s\x01=%s\r\n" %
+                            ("C=%s\x01=%s\x01=%s\x01=%s\x01=%s\x01=%s\r\n" %
                             (stripx01(chanid.channelname),
                              stripx01(chanid.GetChannelModes(0, True)),
                              stripx01(chanid._topic),
-                             chanid._founder, compress(dumps(chanid._prop)).encode("hex"),
-                             compress(dumps(chanid.ChannelAccess)).encode("hex")))
+                             chanid._founder, compress(dumps(chanid._prop)).hex(),
+                             compress(dumps(chanid.ChannelAccess)).hex())).encode(character_encoding))
 
                 myfile.close()
 
@@ -948,8 +950,8 @@ def WriteUsers(localusers, globalusers, nicksv=True, chans=True, access=False):
                 myfile = open("pyRCX/database/access.dat", "wb")
                 myfile.write(dumps(ServerAccess))
                 myfile.close()
-        except:
-            pass
+        except Exception as exception:
+            logger.error(exception)
 
         writeUsers_lock = False
 
@@ -2116,29 +2118,9 @@ def CheckServerAccess(nickid=False):
                 WriteUsers(MaxLocal, MaxGlobal, False, False, True)
 
 
-class AccessInformation:
-
-    def __init__(self, object, level, mask, setby, expires, reason, oplevel):
-        self._object = object  # objects: *, #, $
-        self._level = level.upper()
-        self._reason = reason
-        self._mask = mask
-        self._setby = setby
-        self._setat = int(GetEpochTime())
-        if expires == 0:
-            self._expires = 0
-            self._deleteafterexpire = False
-        else:
-            self._expires = int(GetEpochTime()) + (expires*60)
-            self._deleteafterexpire = True
-
-        self._oplevel = oplevel
-
-
 class Access:
     def __init__(self):
         pass
-        # self.records = [] # will contain the list of records added using the AccessInformation class
 
     # channels only - this only needs to be done on events where access may apply, commands are JOIN and ACCESS
     def CheckChannelExpiry(self, chanid):
@@ -2319,7 +2301,7 @@ class Access:
                         _securitymsg = True
                     else:
                         ServerAccess.remove(each)
-# self.records.remove(each)
+
 
             if _securitymsg:
                 raw(cid, "922", cid._nickname, "*")
@@ -2349,7 +2331,7 @@ class Access:
                         _securitymsg = True
                     else:
                         chanid.ChannelAccess.remove(each)
-# self.records.remove(each)
+
 
             if _securitymsg:
                 raw(cid, "922", cid._nickname, chanid.channelname)
@@ -2362,7 +2344,7 @@ class Access:
             for each in list(cid._access):
                 if level == "" or level.upper() == each._level.upper():
                     cid._access.remove(each)
-# self.records.remove(each)
+
 
             if level == "":
                 level = "*"
@@ -2376,7 +2358,7 @@ class Access:
                     if (opid.operator_level+2) < each._oplevel:
                         return -2
                     ServerAccess.remove(each)
-# self.records.remove(each)
+
                     return 1
 
         elif object[0] == "#" or object[0] == "%" or object[0] == "&":
@@ -2401,7 +2383,7 @@ class Access:
                     if _operlevel < each._oplevel:
                         return -2
                     chanid.ChannelAccess.remove(each)
-# self.records.remove(each)
+
                     return 1
 
         else:
@@ -2409,12 +2391,12 @@ class Access:
             for each in CopyAccess:
                 if each._mask.lower() == mask.lower() and each._level.lower() == level.lower():
                     cid._access.remove(each)
-# self.records.remove(each)
+
                     return 1
 
         return -1
 
-    def AddRecord(self, cid, object, level, mask, expires, tag):	   # .AddRecord(self,"*","DENY",_mask,0,tag)
+    def AddRecord(self, cid, object, level, mask, expires, tag):
         _list = None
         objid = None
         if object == "*":
@@ -2465,6 +2447,8 @@ class Access:
         if object == "*":
             entry = AccessInformation("*", level, mask, setby, expires, tag, _operlevel)
             ServerAccess.append(entry)
+
+        # TODO this should support prefixchar rather than hard coded values
         elif object[0] == "#" or object[0] == "%" or object[0] == "&":
             entry = AccessInformation(objid.channelname, level, mask, setby, expires, tag, _operlevel)
             objid.ChannelAccess.append(entry)
@@ -2745,13 +2729,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
     def send(self, data):
         try:
-            if self._flashclient:
-                self.client.sendall("\x00" + data.replace("<", "&lt;"))
-                self.client.sendall("\x00\r\n")
-            else:
-                r, w, e = select([], [self.client], [], 1)
-                if w:
-                    self.client.sendall(data.encode("UTF-8"))
+            r, w, e = select([], [self.client], [], 1)
+            if w:
+                self.client.sendall(data.encode(character_encoding))
         except:
             pass
 
@@ -3002,7 +2982,6 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
             except:
                 print(sys.exc_info())
 
-            # bots run from localhost, can't limit to 3 bots!!!
             if str(MaxUsersPerConnection) == str(calcuseramount) and ipaddress != userdetails and exemptFromConnectionKiller == False:
                 unknownConnections.remove(self)
                 print("*** Connection closed '", self.details[0], "', too many connections")
@@ -3105,7 +3084,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                     break
 
                                 else:
-                                    strdata += c.decode("cp1252")
+                                    strdata += c.decode(character_encoding)
 
                         except socket.error as xxx_todo_changeme:
                             (value, message) = xxx_todo_changeme.args
@@ -4164,8 +4143,6 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                     try:
                                         raw(self, "321", self._nickname)
                                         for chanid in getGlobalChannels():
-                                            print(chanid.channelname)
-                                            # chanid = channels[each.lower()]
                                             chanusers = str(len(chanid._users) - len(chanid._watch))
                                             if chanid.MODE_auditorium and self._nickname.lower() not in operator_entries and isOp(self._nickname.lower(), chanid.channelname) == False:
                                                 chanusers = str((len(chanid._op) + len(chanid._owner)))
@@ -7629,37 +7606,37 @@ def Nickserv_function(self, param, msgtype=""):
 
 
 def settings():  # this is information such as channels, max users etc
-    myfile = open('pyRCX/database/channels.dat', 'rb')
-    for lineStr in myfile.readlines():
-        s_line = lineStr.split("\x01")
-        if s_line[0].split("=")[0].upper() == "C":
-            s_chan = s_line[0].split("=")[1]
-            s_modes = s_line[1].split("=")[1]
-            s_topic = s_line[2].split("=", 1,)[1]
-            s_founder = s_line[3].split("=", 1,)[1]
-            s_prop = s_line[4].split("=", 1,)[1]
-            s_ax = s_line[5].split("=", 1,)[1]
+    with open('pyRCX/database/channels.dat', 'rb') as channels_file:
+        for bytes_line in channels_file.readlines():
+            s_line = bytes_line.strip().split(b'\x01')
+            if s_line[0].split(b'=')[0].upper() == b'C':
+                s_chan = s_line[0].split(b'=')[1].decode(character_encoding)
+                s_modes = s_line[1].split(b'=')[1].decode(character_encoding)
+                s_topic = s_line[2].split(b'=', 1,)[1].decode(character_encoding)
+                s_founder = s_line[3].split(b'=', 1,)[1].decode(character_encoding)
+                s_prop = bytes.fromhex(s_line[4].split(b'=', 1,)[1].decode(character_encoding))
+                s_ax = bytes.fromhex(s_line[5].split(b'=', 1,)[1].decode(character_encoding))
 
-            chanclass = Channel(s_chan, "", s_modes)  # create
-            if chanclass.channelname != "":
-                _founder = ""
-                channels[s_chan.lower()] = chanclass
-                if "r" in s_modes:
-                    chanclass._prop.registered = ServerName
-                if s_founder != "":
-                    _founder = _Access.CreateMaskString(s_founder, True)
+                chanclass = Channel(s_chan, "", s_modes)  # create
 
-                chanclass._founder = _founder
-                chanclass._topic = s_topic
+                if chanclass.channelname != "":
+                    _founder = ""
+                    channels[s_chan.lower()] = chanclass
+                    if "r" in s_modes:
+                        chanclass._prop.registered = ServerName
+                    if s_founder != "":
+                        _founder = _Access.CreateMaskString(s_founder, True)
 
-                chanclass._topic_nick = ServerName
-                chanclass._topic_time = GetEpochTime()
-                chanclass.ChannelAccess = loads(decompress(s_ax.strip().decode("hex")))
-                chanclass._prop = loads(decompress(s_prop.decode("hex")))
-                if s_founder != "":
-                    _addrec = _Access.AddRecord("", chanclass.channelname.lower(), "OWNER", _founder, 0, "")
+                    chanclass._founder = _founder
+                    chanclass._topic = s_topic
 
-    myfile.close()
+                    chanclass._topic_nick = ServerName
+                    chanclass._topic_time = GetEpochTime()
+
+                    chanclass.ChannelAccess = loads(decompress(s_ax.strip()))
+                    chanclass._prop = loads(decompress(s_prop))
+                    if s_founder != "":
+                        _addrec = _Access.AddRecord("", chanclass.channelname.lower(), "OWNER", _founder, 0, "")
 
     global ServerAccess
 
@@ -7751,10 +7728,10 @@ def pyRCXsetup():
         createfile = open("pyRCX/database/Nickserv.dat", "w")
         createfile.close()
 
-    if os.path.isfile("pyRCX/database/users.dat") == False:
+    if not os.path.isfile("pyRCX/database/users.dat"):
         print("*** Could not find previous historic user counts, history being setup")
-        createfile = open("pyRCX/database/access.dat", "w")
-        createfile.write("1\n1\n")
+        createfile = open("pyRCX/database/users.dat", "w")
+        createfile.write("1\n1")
         createfile.close()
 
 

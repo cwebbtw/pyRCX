@@ -2,7 +2,10 @@ import logging
 import unittest
 import sys
 
+from unittest.mock import MagicMock
+
 from pyRCX import server
+
 
 class NickServTest(unittest.TestCase):
     """
@@ -13,6 +16,7 @@ class NickServTest(unittest.TestCase):
         
     def setUp(self):
         logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+        server.WriteUsers = MagicMock()
         
     def test_register_creates_registered_nickname(self):
 
