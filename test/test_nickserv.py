@@ -58,7 +58,7 @@ class NickServTest(unittest.TestCase):
         nickserv_entry = server.Nickserv[group_owner_nickname]
 
         # Then
-        self.assertEqual(nickserv_entry._groupnick, [client._nickname])
+        self.assertEqual(nickserv_entry.grouped_nicknames, [client._nickname])
 
     def test_identify_registered_nickname(self):
 
