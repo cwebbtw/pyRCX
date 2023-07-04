@@ -16,7 +16,6 @@ class FilterEntry:
 
 
 class Filtering:
-
     """
     Represents a filtering capability but currently the main server violates encapsulation
     as not all callers use the filter method but instead access the underlying list

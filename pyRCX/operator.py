@@ -2,7 +2,7 @@ class OperatorEntry:
     """
     Represents an operator entry parsed from configuration
     """
-    
+
     guide = False
     hidden = False
     watchserver = False

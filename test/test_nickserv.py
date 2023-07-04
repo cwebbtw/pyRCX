@@ -13,13 +13,12 @@ class NickServTest(unittest.TestCase):
     of ownership when visiting the server. This test case challenges the scenarios
     that a user will perform.
     """
-        
+
     def setUp(self):
         logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
         server.WriteUsers = MagicMock()
-        
-    def test_register_creates_registered_nickname(self):
 
+    def test_register_creates_registered_nickname(self):
         # Given
         client = server.ClientConnecting(None, ["details1"], None)
         client._username = "~ABCDE0123456789"
@@ -39,7 +38,6 @@ class NickServTest(unittest.TestCase):
         self.assertEqual(nickserv_entry._email, email)
 
     def test_group_groups_nicknames(self):
-
         # Given
         group_owner_nickname = "sample_nickname2"
 
@@ -65,7 +63,6 @@ class NickServTest(unittest.TestCase):
         self.assertEqual(nickserv_entry.grouped_nicknames, [client._nickname])
 
     def test_identify_registered_nickname(self):
-
         # Given
         client = server.ClientConnecting(None, ["details3"], None)
         client._username = "~ABCDE0123456789"
@@ -89,7 +86,6 @@ class NickServTest(unittest.TestCase):
         self.assertTrue(client._MODE_register)
 
     def test_identify_registered_nickname_with_invalid_password(self):
-
         # Given
         client = server.ClientConnecting(None, ["details3"], None)
         client._username = "~ABCDE0123456789"
