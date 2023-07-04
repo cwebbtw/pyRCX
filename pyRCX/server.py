@@ -2319,7 +2319,7 @@ class Access:
                         _securitymsg = True
                     else:
                         ServerAccess.remove(each)
-# self.records.remove(each)
+
 
             if _securitymsg:
                 raw(cid, "922", cid._nickname, "*")
@@ -2349,7 +2349,7 @@ class Access:
                         _securitymsg = True
                     else:
                         chanid.ChannelAccess.remove(each)
-# self.records.remove(each)
+
 
             if _securitymsg:
                 raw(cid, "922", cid._nickname, chanid.channelname)
@@ -2362,7 +2362,7 @@ class Access:
             for each in list(cid._access):
                 if level == "" or level.upper() == each._level.upper():
                     cid._access.remove(each)
-# self.records.remove(each)
+
 
             if level == "":
                 level = "*"
@@ -2376,7 +2376,7 @@ class Access:
                     if (opid.operator_level+2) < each._oplevel:
                         return -2
                     ServerAccess.remove(each)
-# self.records.remove(each)
+
                     return 1
 
         elif object[0] == "#" or object[0] == "%" or object[0] == "&":
@@ -2401,7 +2401,7 @@ class Access:
                     if _operlevel < each._oplevel:
                         return -2
                     chanid.ChannelAccess.remove(each)
-# self.records.remove(each)
+
                     return 1
 
         else:
@@ -2409,7 +2409,7 @@ class Access:
             for each in CopyAccess:
                 if each._mask.lower() == mask.lower() and each._level.lower() == level.lower():
                     cid._access.remove(each)
-# self.records.remove(each)
+
                     return 1
 
         return -1
@@ -2745,13 +2745,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
     def send(self, data):
         try:
-            if self._flashclient:
-                self.client.sendall("\x00" + data.replace("<", "&lt;"))
-                self.client.sendall("\x00\r\n")
-            else:
-                r, w, e = select([], [self.client], [], 1)
-                if w:
-                    self.client.sendall(data.encode("UTF-8"))
+            r, w, e = select([], [self.client], [], 1)
+            if w:
+                self.client.sendall(data.encode("cp1252"))
         except:
             pass
 
