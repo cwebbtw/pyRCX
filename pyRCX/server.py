@@ -48,8 +48,10 @@ ServerAccess: List[AccessInformation] = []
 
 invisible_client_entries: Set[ClientBaseClass] = set()
 secret_client_entries: Set[ClientBaseClass] = set()
+unknown_connection_entries: Set[ClientBaseClass] = set()
 
-statistics: Statistics = Statistics(nickname_to_client_mapping_entries, operator_entries, invisible_client_entries, secret_client_entries)
+statistics: Statistics = Statistics(nickname_to_client_mapping_entries, operator_entries, invisible_client_entries,
+                                    secret_client_entries, unknown_connection_entries)
 
 # Here are some settings, these can be coded into the conf later I suppose
 
@@ -96,7 +98,6 @@ temp_noopers = []
 operlines = []
 connections = []
 
-unknownConnections = []
 connectionsExempt = []
 
 createmute = {}
@@ -1090,8 +1091,8 @@ def raw(param1="", param2="", param3="", param4="", param5="", param6="", param7
                 " :operator(s) online\r\n")  # display if operators available
 
     if param2 == "253":
-        if len(unknownConnections) > 0:
-            param1.send(":" + ServerName + " 253 " + param3 + " " + str(len(unknownConnections)) +
+        if len(unknown_connection_entries) > 0:
+            param1.send(":" + ServerName + " 253 " + param3 + " " + str(len(unknown_connection_entries)) +
                         " :unknown connection(s)\r\n")  # display if operators available
 
     if param2 == "254":
@@ -2798,7 +2799,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
             "Notice -- User Connecting on port %s (%s!%s@%s) [%s] \r\n" %
             (self.port, self._nickname, self._username, self._hostmask, self.details[0]))
 
-        unknownConnections.remove(self)
+        unknown_connection_entries.remove(self)
 
         raw(self, "001", self._nickname)
         raw(self, "002", self._nickname, ServerName)
@@ -2902,7 +2903,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
             return 1
 
     def run(self):
-        unknownConnections.append(self)
+        unknown_connection_entries.add(self)
         connections.append(self)
         print("*** Connection accepted from '", self.details[0], "' users[", str(len(connections)), "/", MaxUsers, "]")
 
@@ -2912,7 +2913,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
             self.send("ERROR :Closing Link: %s (Server is full)\r\n" % (self.details[0]))
             self.close()
             connections.remove(self)
-            unknownConnections.remove(self)
+            unknown_connection_entries.remove(self)
         else:
             calcuseramount = -1
             for v in connections:
@@ -2940,7 +2941,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
             if str(MaxUsersPerConnection) == str(
                     calcuseramount) and ipaddress != userdetails and exemptFromConnectionKiller == False:
-                unknownConnections.remove(self)
+                unknown_connection_entries.remove(self)
                 print("*** Connection closed '", self.details[0], "', too many connections")
 
                 self.send(
@@ -5611,8 +5612,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
         if self in connections:
             connections.remove(self)
-        if self in unknownConnections:
-            unknownConnections.remove(self)
+        if self in unknown_connection_entries:
+            unknown_connection_entries.remove(self)
         if self in temp_noopers:
             temp_noopers.remove(self)
         if self in secret_client_entries:

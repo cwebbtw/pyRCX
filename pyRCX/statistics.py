@@ -13,13 +13,13 @@ class Statistics:
     """
 
     def __init__(self, nickname_to_client_mapping_entries: Dict[str, ClientBaseClass],
-                 operator_entries: Dict[str, OperatorEntry],
-                 invisible_client_entries: Set[ClientBaseClass],
-                 secret_client_entries: Set[ClientBaseClass]):
-        self._secret_client_entries = secret_client_entries
+                 operator_entries: Dict[str, OperatorEntry], invisible_client_entries: Set[ClientBaseClass],
+                 secret_client_entries: Set[ClientBaseClass], unknown_connection_entries: Set[ClientBaseClass]):
         self._invisible_client_entries = invisible_client_entries
         self._nickname_to_client_mapping_entries = nickname_to_client_mapping_entries
         self._operator_entries = operator_entries
+        self._secret_client_entries = secret_client_entries
+        self._unknown_connection_entries = unknown_connection_entries
         self._max_local = len(self._nickname_to_client_mapping_entries)
 
         self.logger = logging.getLogger('STATISTICS')
@@ -66,6 +66,9 @@ class Statistics:
 
     def current_invisible_users(self) -> int:
         return len(self._invisible_client_entries)
+
+    def current_unknown_connections(self) -> int:
+        return len(self._unknown_connection_entries)
 
     def save(self):
         with open("pyRCX/database/users.dat", "w") as file:
