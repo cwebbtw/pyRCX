@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Dict, Set
 
 from pyRCX.clientbase import ClientBaseClass
@@ -11,6 +12,8 @@ class Statistics:
     regarding the server. This class should be used for all types of statistics rather than
     how it currently is where calculations are all over the place.
     """
+
+    server_launch = time.strftime(" :On-line since %A %B %d %H:%M:%S %Y", time.localtime())
 
     def __init__(self, nickname_to_client_mapping_entries: Dict[str, ClientBaseClass],
                  operator_entries: Dict[str, OperatorEntry], invisible_client_entries: Set[ClientBaseClass],

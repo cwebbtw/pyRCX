@@ -83,7 +83,6 @@ ServerPassword = ""
 passmsg = ""
 MaxUsers = 10
 MaxUsersPerConnection = 3
-ServerLaunch = time.strftime(" :On-line since %A %B %d %H:%M:%S %Y", time.localtime())
 NickservParam = ""
 defconMode = 1
 
@@ -1055,7 +1054,7 @@ def raw(param1="", param2="", param3="", param4="", param5="", param6="", param7
 
     if param2 == "001":
         param1.send(
-            ":" + ServerName + " 001 " + param3 + " :Welcome to the " + NetworkName + " chat service " + param3 + "\r\n")
+            ":" + ServerName + " 001 " + param3 + " :Welcome to the " + param4 + " chat service " + param3 + "\r\n")
 
     if param2 == "002":
         param1.send(":" + ServerName + " 002 " + param3 + " :Your host is " + param4 + ", running version 3.0.0\r\n")
@@ -1301,8 +1300,8 @@ def raw(param1="", param2="", param3="", param4="", param5="", param6="", param7
         param1.send(":" + ServerName + " 368 " + param3 + " " + param4 + " :End of Channel Ban List\r\n")
 
     if param2 == "371":
-        param1.send(":" + ServerName + " 371 " + param3 + " :" + NetworkName + " communication service 3.0.0\r\n:" +
-                    ServerName + " 371 " + param3 + ServerLaunch + "\r\n")
+        param1.send(":" + ServerName + " 371 " + param3 + " :" + param4 + " communication service 3.0.0\r\n:" +
+                    ServerName + " 371 " + param3 + statistics.server_launch + "\r\n")
 
     if param2 == "372":
         param1.send(":" + ServerName + " 372 " + param3 + " :- " + param4.replace("\r", "").replace("\n", "") + "\r\n")
@@ -2803,7 +2802,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
         unknown_connection_entries.remove(self)
 
-        raw(self, "001", self._nickname)
+        raw(self, "001", self._nickname, NetworkName)
         raw(self, "002", self._nickname, ServerName)
         raw(self, "003", self._nickname)
         raw(self, "004", self._nickname, NetworkName)
@@ -5249,7 +5248,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                     raw(self, "391", self._nickname)
 
                                 elif param[0] == "INFO":
-                                    raw(self, "371", self._nickname)
+                                    raw(self, "371", self._nickname, NetworkName)
                                     raw(self, "374", self._nickname)
 
                                 elif param[0] == "GENPASS":
@@ -5405,8 +5404,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                     raw(self, "318", self._nickname, param[1])
 
                                 elif param[0] == "ADMIN":
-                                    raw(self, "258", self._nickname)
-                                    raw(self, "259", self._nickname)
+                                    raw(self, "258", self._nickname, ServerAdmin1)
+                                    raw(self, "259", self._nickname, ServerAdmin2)
 
                                 elif param[0] == "VERSION":
                                     raw(self, "256", self._nickname)
