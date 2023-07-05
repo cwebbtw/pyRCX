@@ -37,6 +37,8 @@ from .statistics import Statistics
 
 filtering: Filtering = Filtering()
 
+channel_entries: Dict = {}
+
 nickserv_entries: Dict[str, NickServEntry] = {}
 operator_entries: Dict[str, OperatorEntry] = {}
 
@@ -51,7 +53,7 @@ secret_client_entries: Set[ClientBaseClass] = set()
 unknown_connection_entries: Set[ClientBaseClass] = set()
 
 statistics: Statistics = Statistics(nickname_to_client_mapping_entries, operator_entries, invisible_client_entries,
-                                    secret_client_entries, unknown_connection_entries)
+                                    secret_client_entries, unknown_connection_entries, channel_entries)
 
 # Here are some settings, these can be coded into the conf later I suppose
 
@@ -102,7 +104,7 @@ connectionsExempt = []
 
 createmute = {}
 nickmute = {}
-channels = {}
+
 currentports = {}
 NickservIPprotection = True
 
@@ -707,8 +709,8 @@ class ChannelBaseClass:
 
                     newc = self.cloneid.channelname + str(self.cloneindex + 1)
 
-                    if newc.lower() in channels:  # get rid of any channels that were made before clone rooms were created
-                        chanid = channels[newc.lower()]
+                    if newc.lower() in channel_entries:  # get rid of any channels that were made before clone rooms were created
+                        chanid = channel_entries[newc.lower()]
                         if chanid.MODE_cloneroom == False:
                             for each in chanid._users:
                                 cid = getUserOBJ(each.lower())
@@ -719,8 +721,8 @@ class ChannelBaseClass:
                             chanid.join(joinuser)
                             return
 
-                    channels[newc.lower()] = copy(self)
-                    newchan = channels[newc.lower()]
+                    channel_entries[newc.lower()] = copy(self)
+                    newchan = channel_entries[newc.lower()]
                     newchan.cloneid = self.cloneid
                     newchan.cloneindex = self.cloneindex + 1
                     newchan.channelname = newc
@@ -878,9 +880,9 @@ def WriteUsers(nicksv=True, chans=True, access=False):
 
             if chans:
                 myfile = open("pyRCX/database/channels.dat", "wb")
-                schan = copy(channels)
+                schan = copy(channel_entries)
                 for each in schan:
-                    chanid = channels[each.lower()]
+                    chanid = channel_entries[each.lower()]
                     if chanid.MODE_registered:
                         myfile.write(
                             ("C=%s\x01=%s\x01=%s\x01=%s\x01=%s\x01=%s\r\n" %
@@ -1096,7 +1098,7 @@ def raw(param1="", param2="", param3="", param4="", param5="", param6="", param7
                         " :unknown connection(s)\r\n")  # display if operators available
 
     if param2 == "254":
-        totalchannels = len(channels)
+        totalchannels = len(channel_entries)
         if totalchannels > 0:
             param1.send(":" + ServerName + " 254 " + param3 + " " + str(totalchannels) + " :channels formed\r\n")
 
@@ -1656,16 +1658,16 @@ def InChannel(s, them):
 def Whouser(_whouser, chan, selfn):
     if len(_whouser._channels) > 0:
         if chan != "":
-            _whochan_ = channels[chan]
+            _whochan_ = channel_entries[chan]
         else:
-            _whochan_ = channels[_whouser._channels[0].lower()]
+            _whochan_ = channel_entries[_whouser._channels[0].lower()]
 
         if isSecret(_whochan_, "private",
                     "hidden") and selfn._nickname.lower() not in _whochan_._users and selfn._nickname.lower() not in operator_entries:
             _whochan = "*"
         else:
             if chan != "":
-                _whochan_ = channels[chan.lower()]
+                _whochan_ = channel_entries[chan.lower()]
             _whochan = _whochan_.channelname
     else:
         _whochan = "*"  # not in any channels
@@ -1743,7 +1745,7 @@ def SendComChan(_channels, _self, _cid, _send, param):
             _cid.send(nonIRCXsend)
 
     for each in copy(_channels):  # for each in selfs comchannels
-        chan = channels[each.lower()]
+        chan = channel_entries[each.lower()]
         for n in chan._users:
             if n in nickname_to_client_mapping_entries:
                 nick = nickname_to_client_mapping_entries[n.lower()]
@@ -2281,7 +2283,7 @@ class Access:
                 raw(cid, "820", cid._nickname, "*", level)
 
         elif object[0] == "#" or object[0] == "%" or object[0] == "&":
-            chanid = channels[object.lower()]
+            chanid = channel_entries[object.lower()]
             _operlevel = 0
             if cid._nickname.lower() in chanid._op:
                 _operlevel = 1
@@ -2330,7 +2332,7 @@ class Access:
                     return 1
 
         elif object[0] == "#" or object[0] == "%" or object[0] == "&":
-            chanid = channels[object.lower()]
+            chanid = channel_entries[object.lower()]
             _operlevel = 0
             if cid._nickname.lower() in chanid._op:
                 _operlevel = 1
@@ -2377,7 +2379,7 @@ class Access:
             _list = ServerAccess
 
         elif object[0] == "#" or object[0] == "%" or object[0] == "&":
-            objid = channels[object.lower()]
+            objid = channel_entries[object.lower()]
             _operlevel = 0
             if cid == "":
                 _operlevel = 5
@@ -2601,13 +2603,13 @@ _lastError = []
 
 
 def getGlobalChannels():
-    for each in channels:
-        yield channels[each]
+    for each in channel_entries:
+        yield channel_entries[each]
 
 
 def delGlobalChannel(chan_name):
-    if chan_name.lower() in channels:
-        del channels[chan_name.lower()]
+    if chan_name.lower() in channel_entries:
+        del channel_entries[chan_name.lower()]
 
 
 def getUserOBJ(nick):
@@ -2625,7 +2627,7 @@ def getOperOBJ(nick):
 
 
 def getChannelOBJ(chan):
-    schannels = copy(channels)
+    schannels = copy(channel_entries)
     if chan.lower() in schannels:
         return schannels[chan.lower()]
 
@@ -3885,7 +3887,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                             iloop = 0
                                             chans = []
-                                            if param[1].lower() not in channels and param[1].lower() not in nickname_to_client_mapping_entries:
+                                            if param[1].lower() not in channel_entries and param[1].lower() not in nickname_to_client_mapping_entries:
                                                 self.pmflooding += 1
 
                                             while iloop < len(param[1].split(",")):
@@ -3908,8 +3910,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                         if msg[0] == ":":
                                                             msg = strdata.split(" ", 2)[2][1:]
 
-                                                        if recipient.lower() in channels:  # channel exists
-                                                            chanclass = channels[recipient]
+                                                        if recipient.lower() in channel_entries:  # channel exists
+                                                            chanclass = channel_entries[recipient]
                                                             chanclass.communicate(self._nickname, param[0], msg)
                                                             if self._nickname.lower() not in operator_entries:
                                                                 if isOp(self._nickname.lower(), chanclass.channelname):
@@ -3920,7 +3922,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                 # let's work in ms shall we?
                                                                 if int((
                                                                                GetEpochTime() - self.pmlastcommand) * 1000) <= floodtime:
-                                                                    if param[1].lower() in channels:
+                                                                    if param[1].lower() in channel_entries:
                                                                         self.pmflooding += 1
 
                                                                 else:
@@ -4056,8 +4058,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                     if self._MODE_inviteblock:
                                         raw(self, "998", self._nickname, self._nickname, "*")
                                     else:
-                                        if param[2].lower() in channels:
-                                            chanid = channels[param[2].lower()]
+                                        if param[2].lower() in channel_entries:
+                                            chanid = channel_entries[param[2].lower()]
                                             if self._nickname.lower() in chanid._users:
                                                 if param[1].lower() in nickname_to_client_mapping_entries:
                                                     if self._nickname.lower() in chanid._op or self._nickname.lower() in chanid._owner:
@@ -5072,13 +5074,13 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                 elif param[0] == "CREATE":
                                     _sleep = "%.4f" % (random() / 9)
 
-                                    if param[1].lower() in channels:
+                                    if param[1].lower() in channel_entries:
                                         raw(self, "705", self._nickname, param[1])
                                     else:
                                         if len(self._channels) >= myint(MaxChannelsPerUser):
                                             raw(self, "405", self._nickname, param[1])
                                         else:
-                                            if len(channels) >= myint(MaxChannels):
+                                            if len(channel_entries) >= myint(MaxChannels):
                                                 raw(self, "710", self._nickname)
                                             else:
                                                 if len(param) == 2:
@@ -5103,7 +5105,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                         param[1],
                                                         self._nickname, creationmodes)  # create
                                                     if chanclass.channelname != "":
-                                                        channels[param[1].lower()] = chanclass
+                                                        channel_entries[param[1].lower()] = chanclass
 
                                                     del createmute[param[1].lower()]
                                                 else:
@@ -5173,7 +5175,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 else:
                                                     chanclass.join(self._nickname)
                                             else:
-                                                if len(channels) >= myint(MaxChannels):
+                                                if len(channel_entries) >= myint(MaxChannels):
                                                     raw(self, "710", self._nickname)
 
                                                 elif ChanLockDown == 1:
@@ -5186,7 +5188,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                             param[1].split(",")[iloop],
                                                             self._nickname)  # create
                                                         if chanclass.channelname != "":
-                                                            channels[param[1].split(",")[iloop].lower()] = chanclass
+                                                            channel_entries[param[1].split(",")[iloop].lower()] = chanclass
 
                                                         del createmute[param[1].lower()]
                                                     else:
@@ -5270,8 +5272,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                 elif param[0] == "WHO":
                                     _who = param[1].lower()
                                     if _who[0] == "#" or _who[0] == "%" or _who[0] == "&":
-                                        if _who in channels:
-                                            chanid = channels[_who]
+                                        if _who in channel_entries:
+                                            chanid = channel_entries[_who]
                                             if isSecret(chanid, "private",
                                                         "hidden") == False or self._nickname.lower() in chanid._users or self._nickname.lower() in operator_entries:
                                                 for each in chanid._users:
@@ -5445,8 +5447,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                  param[0],
                                                                  _recipient, tag, data))
 
-                                                    elif _recipient in channels:
-                                                        chan = channels[_recipient]
+                                                    elif _recipient in channel_entries:
+                                                        chan = channel_entries[_recipient]
                                                         if chan.isBanned(self) and chan.MODE_gagonban:
                                                             raw(self, "404", self._nickname, _recipient,
                                                                 "Cannot send to channel whilst banned")
@@ -5512,7 +5514,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                 sendto = []
                 for each in copy(self._channels):
                     try:
-                        chan = channels[each.lower()]
+                        chan = channel_entries[each.lower()]
                         temp = dict(chan._users)
                         for n in temp:
                             if n in nickname_to_client_mapping_entries:
@@ -5593,7 +5595,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
         for each in copy(self._channels):
             try:
-                channels[each.lower()].quit(self._nickname)
+                channel_entries[each.lower()].quit(self._nickname)
             except:
                 print("some channel error")
 
@@ -5744,7 +5746,7 @@ def Nick_function(self: ClientConnecting, param):
             schannels = copy(self._channels)
 
             for gagcheck in schannels:
-                gagchan = channels[gagcheck.lower()]
+                gagchan = channel_entries[gagcheck.lower()]
                 if gagchan.MODE_gagonban and self._nickname.lower() in gagchan._users:
                     for each in gagchan.ChannelAccess:
                         ret = Access().MatchAccess(each._mask, self)
@@ -5772,7 +5774,7 @@ def Nick_function(self: ClientConnecting, param):
                         sendto = []
 
                         for each in schannels:
-                            chan = channels[each.lower()]
+                            chan = channel_entries[each.lower()]
                             copyn = dict(chan._users)
                             for copyn in chan._users:
                                 nick = getUserOBJ(copyn)
@@ -5883,7 +5885,7 @@ def Nick_function(self: ClientConnecting, param):
 
 def Mode_function(self, param, strdata=""):
     if param[1][0] == "#" or param[1][0] == "%" or param[1][0] == "&":  # is a channel
-        schannels = copy(channels)
+        schannels = copy(channel_entries)
         if param[1].lower() in schannels:
             chan = schannels[param[1].lower()]
             if len(param) == 2:
@@ -6835,11 +6837,11 @@ def Mode_function(self, param, strdata=""):
                     if len(param) >= 4:
                         if SetMode:
                             identify = False
-                            for each in channels:
+                            for each in channel_entries:
                                 isowner = False
                                 isop = False
                                 # we need to scan through each channel to check if they are oper
-                                chanid = channels[each.lower()]
+                                chanid = channel_entries[each.lower()]
                                 if self._nickname.lower() in chanid._owner:
                                     isowner = True
                                 if self._nickname.lower() in chanid._op:
@@ -7374,7 +7376,7 @@ def Nickserv_function(self, param, msgtype=""):
                                 cid.send(nonIRCXsend)
 
                             for each in cid._channels:
-                                chan = channels[each.lower()]
+                                chan = channel_entries[each.lower()]
                                 for n in chan._users:
                                     if n in nickname_to_client_mapping_entries:
                                         nick = nickname_to_client_mapping_entries[n.lower()]
@@ -7798,7 +7800,7 @@ def settings():  # this is information such as channels, max users etc
 
                 if chanclass.channelname != "":
                     _founder = ""
-                    channels[s_chan.lower()] = chanclass
+                    channel_entries[s_chan.lower()] = chanclass
                     if "r" in s_modes:
                         chanclass._prop.registered = ServerName
                     if s_founder != "":

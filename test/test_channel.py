@@ -23,17 +23,17 @@ class ChannelTest(unittest.TestCase):
         channel_information._prop = server.Prop("chris", None)
         channel_information._prop.onjoin = "welcome"
 
-        server.channels = {"#somewhere": channel_information}
+        server.channel_entries = {"#somewhere": channel_information}
 
         # When
         server.WriteUsers(False, True, False)
 
-        server.channels = {}
+        server.channel_entries = {}
 
         # Then
         server.settings()
 
-        expected_channel: server.Channel = server.channels["#somewhere"]
+        expected_channel: server.Channel = server.channel_entries["#somewhere"]
 
         self.assertTrue(expected_channel.MODE_registered)
         self.assertTrue(expected_channel.MODE_private)
