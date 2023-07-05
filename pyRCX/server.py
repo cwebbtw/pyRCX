@@ -42,14 +42,14 @@ operator_entries: Dict[str, OperatorEntry] = {}
 
 nickname_to_client_mapping_entries: Dict[str, ClientBaseClass] = {}
 
-statistics: Statistics = Statistics(nickname_to_client_mapping_entries)
-
 disabled_functionality: Dict[str, int] = {}
 
 ServerAccess: List[AccessInformation] = []
 
 invisible_client_entries: Set[ClientBaseClass] = set()
 secret_client_entries: Set[ClientBaseClass] = set()
+
+statistics: Statistics = Statistics(nickname_to_client_mapping_entries, operator_entries, invisible_client_entries, secret_client_entries)
 
 # Here are some settings, these can be coded into the conf later I suppose
 

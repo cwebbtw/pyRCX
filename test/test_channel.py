@@ -12,7 +12,7 @@ class ChannelTest(unittest.TestCase):
     """
 
     def setUp(self):
-        logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+        logging.basicConfig(stream=sys.stdout, level=logging.ERROR)
 
     def test_write_users_should_save_channel(self):
         # Given
