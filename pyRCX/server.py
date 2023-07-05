@@ -18,39 +18,38 @@ from copy import copy
 
 from hashlib import sha256
 from traceback import extract_tb
-from typing import Dict, List
+from typing import Dict, List, Set
 
-try:
-    from zlib import compress, decompress
-except ImportError:  # compression isn't mandatory but linking servers must support linking
-
-    print(
-        "*** IMPORTANT: zlib is not installed on this copy of python, either install it or make sure that the server you link with also doesn't have zlib installed")
-
-
-    def compress(blah):
-        return blah
-
-
-    def decompress(blah):
-        return blah
-
+from zlib import compress, decompress
 from pickle import dumps, loads
 
 # link NTP
 from struct import unpack
 
+# This class needs a major re-work including the nested hierarchy of threading/run methods
+from .clientbase import ClientBaseClass
+
 from .nickserv import NickServEntry
 from .operator import OperatorEntry
 from .filtering import FilterEntry, Filtering
 from .access import AccessInformation
+from .statistics import Statistics
 
 filtering: Filtering = Filtering()
 
 nickserv_entries: Dict[str, NickServEntry] = {}
 operator_entries: Dict[str, OperatorEntry] = {}
 
+nickname_to_client_mapping_entries: Dict[str, ClientBaseClass] = {}
+
+statistics: Statistics = Statistics(nickname_to_client_mapping_entries)
+
+disabled_functionality: Dict[str, int] = {}
+
 ServerAccess: List[AccessInformation] = []
+
+invisible_client_entries: Set[ClientBaseClass] = set()
+secret_client_entries: Set[ClientBaseClass] = set()
 
 # Here are some settings, these can be coded into the conf later I suppose
 
@@ -90,25 +89,20 @@ NTPtime = 0
 timeDifference = 0
 NTPServer = ""
 
-MaxGlobal = 0
-MaxLocal = 0
-
 Ports = []
 FloodingExempt = []
 profanity = []
 temp_noopers = []
 operlines = []
 connections = []
-invisible = []
+
 unknownConnections = []
 connectionsExempt = []
-opersecret = []
+
 createmute = {}
 nickmute = {}
-nicknames = {}
 channels = {}
 currentports = {}
-Disabled = {}
 NickservIPprotection = True
 
 writeUsers_lock = False
@@ -296,10 +290,10 @@ class ChannelBaseClass:
             self._voice.remove(nick.lower())
 
     def kick(self, nick, knick, kickmsg):
-        clientid = nicknames[knick.lower()]
+        clientid = nickname_to_client_mapping_entries[knick.lower()]
         ChanCopyNames = list(self._users)
         for each in ChanCopyNames:
-            cclientid = nicknames[each.lower()]
+            cclientid = nickname_to_client_mapping_entries[each.lower()]
             if self.MODE_auditorium == False or isOp(
                     cclientid._nickname, self.channelname) or isOp(
                 nick._nickname, self.channelname) or isOp(
@@ -434,7 +428,7 @@ class ChannelBaseClass:
         if nick.lower() in self._users:
             return -1  # return False if user is already in channel
         else:
-            cclientid = nicknames[nick.lower()]
+            cclientid = nickname_to_client_mapping_entries[nick.lower()]
             haskey = False
             if self.MODE_authenticatedclients and nick.lower() not in operator_entries:
                 return 0
@@ -471,12 +465,12 @@ class ChannelBaseClass:
             if self.MODE_noclones and nick.lower() not in operator_entries:
                 susers = copy(self._users)
                 for each in susers:
-                    uid = nicknames[each.lower()]
+                    uid = nickname_to_client_mapping_entries[each.lower()]
                     if uid.details[0] == cclientid.details[0]:
                         return -7
 
             if self.MODE_inviteonly and nick.lower() not in operator_entries:
-                cid = nicknames[nick.lower()]
+                cid = nickname_to_client_mapping_entries[nick.lower()]
                 if self.channelname.lower() not in cid._invites and haskey == False:
                     return -2
 
@@ -772,7 +766,7 @@ class ChannelBaseClass:
                         (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname, k_numeric))
 
     def communicate(self, msguser, nop, msg):
-        cclientid = nicknames[msguser.lower()]
+        cclientid = nickname_to_client_mapping_entries[msguser.lower()]
         if msguser.lower() in self._users or self.MODE_externalmessages == False:
             sendto = True
 
@@ -816,7 +810,7 @@ class ChannelBaseClass:
 
             if sendto:
                 for each in copy(self._users):
-                    clientid = nicknames[each.lower()]
+                    clientid = nickname_to_client_mapping_entries[each.lower()]
                     if clientid != cclientid:
                         if self.MODE_auditorium == False or isOp(
                                 clientid._nickname, self.channelname) or isOp(
@@ -839,47 +833,6 @@ class ChannelBaseClass:
             raw(cclientid, "442", cclientid._nickname, self.channelname)
 
 
-class ClientBaseClass:
-    def __init__(self, _servername=ServerName):
-        self._access = []
-        self._nickamount = 0
-        self._nicklock = 0
-        self._nickflood = 0
-        self._away = ""
-        self._nosendnickserv = False
-        self._channels = []
-        self._invites = []
-        self._IRCX = False
-        self._MODE_ = "+"
-        self._MODE_register = False
-        self._MODE_registerchat = False
-        self._MODE_filter = False
-        self._MODE_gag = False
-        self._MODE_invisible = False
-        self._MODE_inviteblock = False
-        self._MODE_nowhisper = False
-        self._MODE_private = False
-        self._nickname = ""
-        self._username = ""
-        self._fullname = ""
-        self._hostmask = ""
-        self._hostname = ""
-        self._server = _servername
-        self._signontime = 0
-        self._idletime = 0
-        self._watch = []
-        self.details = ["", ""]
-        self._friendlyname = ""
-        self.linkclass = None
-
-    def send(self, data):
-        try:
-            print("Data to send: " + data)
-            self.linkclass.sendRawData(self._nickname, data)
-        except:
-            pass
-
-
 class Recipient:
     def __init__(self, recipient, request, ID, parameters):
         self.recipient = recipient
@@ -895,21 +848,6 @@ def stripx01(badstring):
 def GetUsers():
     logger = logging.getLogger('USERS')
 
-    myfile = open("pyRCX/database/users.dat", "r")
-    l = 1
-    localusers = 0
-    globalusers = 0
-    for lineStr in myfile.readlines():
-        if l == 1:
-            localusers = lineStr
-        elif l == 2:
-            globalusers = lineStr
-
-        lineStr = myfile.readline()
-        l += 1
-
-    myfile.close()
-
     myfile = open("pyRCX/database/Nickserv.dat", "rb")
     global nickserv_entries
     rdata = myfile.read()
@@ -922,19 +860,16 @@ def GetUsers():
 
     myfile.close()
 
-    return (localusers.strip(), globalusers.strip())
 
-
-def WriteUsers(localusers, globalusers, nicksv=True, chans=True, access=False):
+def WriteUsers(nicksv=True, chans=True, access=False):
     logger = logging.getLogger('PERSISTENCE')
 
     global writeUsers_lock
     if writeUsers_lock == False:
         writeUsers_lock = True
         try:
-            myfile = open("pyRCX/database/users.dat", "w")
-            myfile.write("%s\r\n%s" % (localusers, globalusers))
-            myfile.close()
+            statistics.save()
+
             if nicksv:
                 myfile = open("pyRCX/database/Nickserv.dat", "wb")
                 myfile.write(compress(dumps(nickserv_entries)))
@@ -969,7 +904,7 @@ def WriteUsers(localusers, globalusers, nicksv=True, chans=True, access=False):
 def rehash(par=1):  # this information will be rehashed by any operator with level 4 privlidges (Administrator)
     myfile = open("pyRCX/conf/pyRCX.conf", "r")
     try:
-        global ServerAddress, ServerName, NetworkName, connectionsExempt, operlines, profanity, Ports, Disabled
+        global ServerAddress, ServerName, NetworkName, connectionsExempt, operlines, profanity, Ports
         global FloodingExempt, MaxUsers, MaxUsersPerConnection, NickfloodAmount, NickfloodWait
         global NickservParam, NTPServer, ipaddress, ServerAdmin1, ServerAdmin2, AdminPassword, ServerPassword
         global passmsg, HostMaskingParam, HostMasking, PrefixChar, MaxServerEntries, MaxChannelEntries, MaxUserEntries
@@ -978,7 +913,6 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
         operlines = []
         profanity = []
         Ports = []
-        Disabled = {}
         FloodingExempt = []
         connectionsExempt = []
 
@@ -986,6 +920,8 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
 
         # TODO this does not fix an existing race condition where the filters may be bypassed whilst a rehash is occurring
         filtering.clear_filters()
+        disabled_functionality.clear()
+
 
         for lineStr in myfile.readlines():
 
@@ -1053,7 +989,7 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
                 else:
                     value = s_line[2].split(";")[0]
 
-                Disabled[s_line[1].upper()] = value
+                disabled_functionality[s_line[1].upper()] = value
 
             if lineStr[0] == "H":
                 s_line = lineStr.split(":")
@@ -1130,7 +1066,7 @@ def raw(param1="", param2="", param3="", param4="", param5="", param6="", param7
                     " pyRCX 3.0.0 abAfghiInoOpPrwzX aAbcCdefGhikKlmMnNopPqQrRsStTuvwxXZ\r\n")
 
     if param2 == "005":
-        if "IRCX" in Disabled:
+        if "IRCX" in disabled_functionality:
             param1.send(
                 ":" + ServerName + " 005 " + param3 + " IRC PREFIX=(ov)@+ NETWORK=" + NetworkName +
                 " are supported by this server\r\n")
@@ -1144,13 +1080,13 @@ def raw(param1="", param2="", param3="", param4="", param5="", param6="", param7
 
     if param2 == "251":
         param1.send(
-            ":" + ServerName + " 251 " + param3 + " :There are " + str(unsigned(len(nicknames) - len(invisible))) +
-            " users and " + str(len(invisible)) + " invisible on 1 server\r\n")
+            ":" + ServerName + " 251 " + param3 + " :There are " + str(unsigned(len(nickname_to_client_mapping_entries) - len(invisible_client_entries))) +
+            " users and " + str(len(invisible_client_entries)) + " invisible on 1 server\r\n")
 
     if param2 == "252":
-        if unsigned(len(operator_entries)) - len(opersecret) > 0:
+        if unsigned(len(operator_entries)) - len(secret_client_entries) > 0:
             param1.send(
-                ":" + ServerName + " 252 " + param3 + " " + str(unsigned(len(operator_entries)) - len(opersecret)) +
+                ":" + ServerName + " 252 " + param3 + " " + str(unsigned(len(operator_entries)) - len(secret_client_entries)) +
                 " :operator(s) online\r\n")  # display if operators available
 
     if param2 == "253":
@@ -1165,7 +1101,7 @@ def raw(param1="", param2="", param3="", param4="", param5="", param6="", param7
 
     if param2 == "255":
         param1.send(":" + ServerName + " 255 " + param3 + " :I have " + str(
-            len(nicknames)) + " client(s) and 1 server\r\n")  # display if operators available
+            len(nickname_to_client_mapping_entries)) + " client(s) and 1 server\r\n")  # display if operators available
 
     if param2 == "256":
         # display if operators available
@@ -1185,18 +1121,14 @@ def raw(param1="", param2="", param3="", param4="", param5="", param6="", param7
         param1.send(":" + ServerName + " 263 " + param3 + " :Message too long, restrict your output\r\n")
 
     if param2 == "265":
-        param1.send(":" + ServerName + " 265 " + param3 + " :Current Local Users: " + str(len(nicknames)
-                                                                                          ) + "  Max: " + str(
-            MaxLocal) + "\r\n")  # display if operators available
+        param1.send(":" + ServerName + " 265 " + param3 + " :Current Local Users: " + str(statistics.current_local_users())
+                                                                                         + "  Max: " + str(
+            statistics.max_local_users()) + "\r\n")  # display if operators available
 
     if param2 == "266":
-        global MaxGlobal
-        if MaxGlobal < getGlobalUserCount():
-            MaxGlobal = getGlobalUserCount()
-
-        param1.send(":" + ServerName + " 266 " + param3 + " :Current Global Users: " + str(getGlobalUserCount()
-                                                                                           ) + "  Max: " + str(
-            MaxGlobal) + "\r\n")  # display if operators available
+        param1.send(":" + ServerName + " 266 " + param3 + " :Current Global Users: " + str(statistics.current_global_users())
+                                                                                         + "  Max: " + str(
+            statistics.max_global_users()) + "\r\n")  # display if operators available
 
     if param2 == "301":
         param1.send(":" + ServerName + " 301 " + param3 + " " + param4._nickname + " " + param4._away + "\r\n")
@@ -1812,8 +1744,8 @@ def SendComChan(_channels, _self, _cid, _send, param):
     for each in copy(_channels):  # for each in selfs comchannels
         chan = channels[each.lower()]
         for n in chan._users:
-            if n in nicknames:
-                nick = nicknames[n.lower()]
+            if n in nickname_to_client_mapping_entries:
+                nick = nickname_to_client_mapping_entries[n.lower()]
                 if nick not in sendto:
                     if _cid._nickname.lower() not in chan._watch:
                         if chan.MODE_auditorium == False or isOp(n, chan.channelname):
@@ -1896,7 +1828,7 @@ class Prop:
 
                     chanid._prop.onjoin = stroj
                     for each in chanid._users:
-                        cid = nicknames[each]
+                        cid = nickname_to_client_mapping_entries[each]
                         cid.send(
                             ":%s!%s@%s PROP %s %s :%s\r\n" %
                             (_self._nickname, _self._username, _self._hostmask, chanid.channelname, onmsg, stroj))
@@ -1918,7 +1850,7 @@ class Prop:
 
                     chanid._prop.client = sData
                     for each in chanid._users:
-                        cid = nicknames[each]
+                        cid = nickname_to_client_mapping_entries[each]
                         cid.send(
                             ":%s!%s@%s PROP %s CLIENT :%s\r\n" %
                             (_self._nickname, _self._username, _self._hostmask, chanid.channelname, sData))
@@ -1950,7 +1882,7 @@ class Prop:
                         chanid._topic_time = int(GetEpochTime())
 
                     for each in chanid._users:
-                        cid = nicknames[each]
+                        cid = nickname_to_client_mapping_entries[each]
                         cid.send(
                             ":%s!%s@%s TOPIC %s :%s\r\n" %
                             (_self._nickname, _self._username, _self._hostmask, chanid.channelname, chanid._topic))
@@ -1969,7 +1901,7 @@ class Prop:
                         sData = sData[1:]
                     chanid._prop.subject = sData
                     for each in chanid._users:
-                        cid = nicknames[each]
+                        cid = nickname_to_client_mapping_entries[each]
                         cid.send(
                             ":%s!%s@%s PROP %s SUBJECT :%s\r\n" %
                             (_self._nickname, _self._username, _self._hostmask, chanid.channelname, sData))
@@ -1988,7 +1920,7 @@ class Prop:
                         sData = 0
                     chanid._prop.lag = myint(sData)
                     for each in chanid._users:
-                        cid = nicknames[each]
+                        cid = nickname_to_client_mapping_entries[each]
                         cid.send(":%s!%s@%s PROP %s LAG :%s\r\n" % (_self._nickname, _self._username,
                                                                     _self._hostmask, chanid.channelname,
                                                                     str(myint(sData))))
@@ -2009,7 +1941,7 @@ class Prop:
                         chanid._prop.language = myint(sData)
 
                     for each in chanid._users:
-                        cid = nicknames[each]
+                        cid = nickname_to_client_mapping_entries[each]
                         cid.send(":%s!%s@%s PROP %s LANGUAGE :%s\r\n" % (_self._nickname, _self._username,
                                                                          _self._hostmask, chanid.channelname,
                                                                          str(chanid._prop.language)))
@@ -2024,7 +1956,7 @@ class Prop:
             if opid.operator_level > 2:
                 if sData.lower() == chanid.channelname.lower():
                     for each in chanid._users:
-                        cid = nicknames[each]
+                        cid = nickname_to_client_mapping_entries[each]
                         cid._channels.remove(chanid.channelname)
                         cid._channels.append(sData)
                         cid.send(
@@ -2052,7 +1984,7 @@ class Prop:
 
                     chanid._prop.hostkey = sData
                     for each in chanid._users:
-                        cid = nicknames[each]
+                        cid = nickname_to_client_mapping_entries[each]
                         if each.lower() in chanid._owner:
                             cid.send(
                                 ":%s!%s@%s PROP %s HOSTKEY :%s\r\n" %
@@ -2072,7 +2004,7 @@ class Prop:
 
                 chanid.MODE_key = str(sData)
                 for each in chanid._users:
-                    cclientid = nicknames[each]
+                    cclientid = nickname_to_client_mapping_entries[each]
                     if sData == "":
                         cclientid.send(
                             ":%s!%s@%s MODE %s -k\r\n" %
@@ -2103,7 +2035,7 @@ class Prop:
                     time.sleep(0.2)
 
                     for each in chanid._users:
-                        cid = nicknames[each]
+                        cid = nickname_to_client_mapping_entries[each]
                         if each.lower() in chanid._owner:
                             cid.send(":%s!%s@%s PROP %s OWNERKEY :%s\r\n" %
                                      (_self._nickname, _self._username, _self._hostmask, chanid.channelname, sData))
@@ -2130,7 +2062,7 @@ class Prop:
 
             if b:
                 for each in chanid._users:
-                    cid = nicknames[each]
+                    cid = nickname_to_client_mapping_entries[each]
                     cid.send(":%s!%s@%s PROP %s RESET :%d\r\n" % (_self._nickname, _self._username,
                                                                   _self._hostmask, chanid.channelname,
                                                                   chanid._prop.reset))
@@ -2143,7 +2075,7 @@ def CheckServerAccess(nickid=False):
         if int(GetEpochTime()) >= each._expires:
             if each._deleteafterexpire:
                 ServerAccess.remove(each)
-                WriteUsers(MaxLocal, MaxGlobal, False, False, True)
+                WriteUsers(False, False, True)
 
 
 class Access:
@@ -2465,7 +2397,7 @@ class Access:
             _list = objid.ChannelAccess
 
         else:
-            objid = nicknames[object.lower()]
+            objid = nickname_to_client_mapping_entries[object.lower()]
             _list = objid._access
             _operlevel = 0
 
@@ -2617,7 +2549,7 @@ class Channel(ChannelBaseClass):
         self.channelname = channelname
         if joinuser != "" and self.__validate(channelname, joinuser) == False:
             if joinuser != "":
-                cclientid = nicknames[joinuser.lower()]
+                cclientid = nickname_to_client_mapping_entries[joinuser.lower()]
                 cclientid.send(":%s 706 %s :Channel name is not valid\r\n" % (ServerName, cclientid._nickname))
 
             delGlobalChannel(self.channelname.lower())
@@ -2632,8 +2564,8 @@ class Channel(ChannelBaseClass):
                 self.MODE_noircx = True
 
             if joinuser != "":
-                self._users[joinuser.lower()] = nicknames[joinuser.lower()]
-                cclientid = nicknames[joinuser.lower()]
+                self._users[joinuser.lower()] = nickname_to_client_mapping_entries[joinuser.lower()]
+                cclientid = nickname_to_client_mapping_entries[joinuser.lower()]
 
             if joinuser != "":
                 if self.MODE_noircx == False:
@@ -2664,13 +2596,6 @@ class Channel(ChannelBaseClass):
 
 Noop = False
 
-
-def getGlobalUserCount():
-    m = len(nicknames)
-
-    return m
-
-
 _lastError = []
 
 
@@ -2685,8 +2610,8 @@ def delGlobalChannel(chan_name):
 
 
 def getUserOBJ(nick):
-    if nick.lower() in nicknames:
-        return nicknames[nick.lower()]
+    if nick.lower() in nickname_to_client_mapping_entries:
+        return nickname_to_client_mapping_entries[nick.lower()]
 
     return None
 
@@ -2710,7 +2635,7 @@ def sendWatchOpers(details):
     for each in operator_entries:
         opid = operator_entries[each.lower()]
         if opid.watchserver:
-            scid = nicknames[each.lower()]
+            scid = nickname_to_client_mapping_entries[each.lower()]
             scid.send(":%s NOTICE %s :*** %s" % (ServerName, scid._nickname, details))
 
 
@@ -2718,7 +2643,7 @@ def sendNickservOpers(details):
     for each in operator_entries:
         opid = operator_entries[each.lower()]
         if opid.watchnickserv:
-            scid = nicknames[each.lower()]
+            scid = nickname_to_client_mapping_entries[each.lower()]
             scid.send(":%s NOTICE %s :*** %s" % (ServerName, scid._nickname, details))
 
 
@@ -2726,7 +2651,7 @@ def sendAdminOpers(details):
     for each in operator_entries:
         opid = operator_entries[each.lower()]
         if opid.operator_level >= 3:
-            scid = nicknames[each.lower()]
+            scid = nickname_to_client_mapping_entries[each.lower()]
             scid.send(details)
 
 
@@ -2734,7 +2659,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
     def __init__(self, client, details, port):
 
-        ClientBaseClass.__init__(self)
+        ClientBaseClass.__init__(self, ServerName)
 
         self._server = ServerName
         self.die = False
@@ -2752,7 +2677,6 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
         self._server = ServerName
         self._signontime = int(GetEpochTime())
         self._welcome = False
-        self._flashclient = False
         self._idletime = int(GetEpochTime())
 
         threading.Thread.__init__(self)
@@ -2805,12 +2729,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
         return True
 
     def _validate(self, text):
-        if self._flashclient == True:
-            flashallowed = "\>"  # only guest clients can use the >, they can't however use it if they are registered, the > just means guest
-        else:
-            flashallowed = ""
-        check = re.compile("^[a-z0-9A-Z\_\-\^\|\`\'\[\]" + flashallowed + "\\\~\{\}\x7F-\xFF]{1,32}$")
-        if check.match(text) == None:
+        check = re.compile("^[a-z0-9A-Z\_\-\^\|\`\'\[\]\\\~\{\}\x7F-\xFF]{1,32}$")
+        if check.match(text) is None:
             return False
         else:
             return True
@@ -2880,12 +2800,6 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
         unknownConnections.remove(self)
 
-        global MaxLocal, MaxGlobal
-
-        if len(nicknames) >= int(MaxGlobal):
-            MaxLocal = len(nicknames)
-            MaxGlobal = len(nicknames)
-
         raw(self, "001", self._nickname)
         raw(self, "002", self._nickname, ServerName)
         raw(self, "003", self._nickname)
@@ -2908,7 +2822,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                 is_groupednick = True
                 break
 
-        if self._nickname.lower() in nickserv_entries and self._nickname.lower() in nicknames and self._nosendnickserv == False:
+        if self._nickname.lower() in nickserv_entries and self._nickname.lower() in nickname_to_client_mapping_entries and self._nosendnickserv == False:
             self.send(
                 ":%s!%s@%s NOTICE %s :That nickname is owned by somebody else\r\n:%s!%s@%s NOTICE %s :If this is your nickname, you can identify with \x02/nickserv IDENTIFY \x1Fpassword\x1F\x02\r\n" %
                 ("NickServ", "NickServ", NetworkName, self._nickname, "NickServ", "NickServ", NetworkName,
@@ -2926,12 +2840,12 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
         Mode_function(self, ["MODE", self._nickname, UserDefaultModes])
 
     def _logoncheck(self):
-        if self._username != "" and self._nickname != "" and self._welcome == False and self._nickname.lower() not in nicknames:
+        if self._username != "" and self._nickname != "" and self._welcome == False and self._nickname.lower() not in nickname_to_client_mapping_entries:
             if ServerPassword != "" and self._password == False:
                 return False
 
             self._welcome = True
-            nicknames[self._nickname.lower()] = self  # update entry from dictionary
+            nickname_to_client_mapping_entries[self._nickname.lower()] = self  # update entry from dictionary
 
             if self._nickname.lower() in nickmute:
                 del nickmute[self._nickname.lower()]  # log on affirmed, now nicknames can take over
@@ -2941,9 +2855,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
             return False
 
     def _isDisabled(self, command):
-        if command in Disabled:
+        if command in disabled_functionality:
 
-            val = myint(Disabled[command])
+            val = disabled_functionality[command]
             operlevel = 0
             if self._nickname.lower() in operator_entries:
                 opid = operator_entries[self._nickname.lower()]
@@ -3217,10 +3131,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                         elif param[0] == "AUTH":
                             try:
-                                if param[1] == "FLASH":
-                                    self._flashclient = True
-                                else:
-                                    raw(self, "912", self._nickname, param[1])
+                                raw(self, "912", self._nickname, param[1])
                             except:
                                 raw(self, "461", self._nickname, param[0])
 
@@ -3354,8 +3265,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if Noop == False:
                                                     Noop = True
                                                     odict = dict(operator_entries)
-                                                    for each in nicknames:
-                                                        cid = nicknames[each]
+                                                    for each in nickname_to_client_mapping_entries:
+                                                        cid = nickname_to_client_mapping_entries[each]
                                                         if cid._nickname.lower() in odict:
                                                             opid2 = odict[cid._nickname.lower()]
                                                             if opid2.operator_level < opid.operator_level:
@@ -3455,7 +3366,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                             ")\r\n")
 
                                                     for each in chanid._users:
-                                                        cid = nicknames[each]
+                                                        cid = nickname_to_client_mapping_entries[each]
                                                         cid._channels.remove(chanid.channelname)
                                                         raw(cid, "934", cid._nickname, chanid.channelname)
 
@@ -3476,8 +3387,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                     if opid:
                                         if opid.operator_level == 4:
                                             if param[1] == AdminPassword:
-                                                for each in nicknames:
-                                                    e = nicknames[each]
+                                                for each in nickname_to_client_mapping_entries:
+                                                    e = nickname_to_client_mapping_entries[each]
                                                     e.send(
                                                         ":" + ServerName +
                                                         " NOTICE SERVER :*** This Server has been closed by the Network Administrator\r\n")
@@ -3496,8 +3407,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                             ":" + ServerName + " NOTICE STATS :*** Viewing Online guides '" + param[1]
                                             [0] + "' \r\n")
                                         foundguide = False
-                                        for each in nicknames:
-                                            nickid = nicknames[each.lower()]
+                                        for each in nickname_to_client_mapping_entries:
+                                            nickid = nickname_to_client_mapping_entries[each.lower()]
                                             if nickid._nickname.lower() in operator_entries:
                                                 opid = operator_entries[nickid._nickname.lower()]
                                                 if opid.guide:
@@ -3597,7 +3508,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 self.send(":" + ServerName +
                                                           " NOTICE STATS :*** Viewing Disabled statistics '" +
                                                           param[1][0] + "' \r\n")
-                                                for each in Disabled:
+                                                for each in disabled_functionality:
                                                     self.send(
                                                         ":" + ServerName + " 212 " + self._nickname + " :" + each + "\r\n")
 
@@ -3679,8 +3590,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                 elif param[0] == "GLOBAL":
                                     if opid:
                                         if opid.operator_level > 2:
-                                            for each in nicknames:
-                                                cid = nicknames[each.lower()]
+                                            for each in nickname_to_client_mapping_entries:
+                                                cid = nickname_to_client_mapping_entries[each.lower()]
                                                 cid.send(
                                                     ":" + NetworkName + " NOTICE " + cid._nickname + " :" +
                                                     strdata.split(" ", 1)[1] + "\r\n")
@@ -3888,7 +3799,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                             chanid._topic_time = GetEpochTime()
 
                                                         for each in chanid._users:
-                                                            clientid = nicknames[each]
+                                                            clientid = nickname_to_client_mapping_entries[each]
                                                             clientid.send(
                                                                 ":%s!%s@%s TOPIC %s :%s\r\n" % (
                                                                 self._nickname, self._username, self._hostmask,
@@ -3973,7 +3884,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                             iloop = 0
                                             chans = []
-                                            if param[1].lower() not in channels and param[1].lower() not in nicknames:
+                                            if param[1].lower() not in channels and param[1].lower() not in nickname_to_client_mapping_entries:
                                                 self.pmflooding += 1
 
                                             while iloop < len(param[1].split(",")):
@@ -4040,8 +3951,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                         elif recipient[0] == "*" or recipient[0] == "$":
                                                             if opid:
                                                                 if recipient[0] == "$":
-                                                                    for n in nicknames:
-                                                                        cclientid = nicknames[n.lower()]
+                                                                    for n in nickname_to_client_mapping_entries:
+                                                                        cclientid = nickname_to_client_mapping_entries[n.lower()]
                                                                         cclientid.send(":%s!%s@%s %s %s :%s\r\n" %
                                                                                        (self._nickname, self._username,
                                                                                         self._hostmask,
@@ -4049,8 +3960,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                                         cclientid._nickname, msg))
                                                                 else:
                                                                     if opid.operator_level > 2:
-                                                                        for n in nicknames:
-                                                                            cclientid = nicknames[n.lower()]
+                                                                        for n in nickname_to_client_mapping_entries:
+                                                                            cclientid = nickname_to_client_mapping_entries[n.lower()]
                                                                             cclientid.send(
                                                                                 ":%s!%s@%s %s %s :%s\r\n" % (
                                                                                 self._nickname, self._username,
@@ -4069,7 +3980,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                             if int(
                                                                     (
                                                                             GetEpochTime() - self.pmlastcommand) * 1000) <= floodtime:  # let's work in ms shall we?
-                                                                if param[1].lower() in nicknames:
+                                                                if param[1].lower() in nickname_to_client_mapping_entries:
                                                                     self.pmflooding += 1
                                                             else:
                                                                 self.pmflooding = 0
@@ -4118,7 +4029,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                                 ":" + ServerName +
                                                                                 " NOTICE SERVER :*** Cannot send a message to this user, you must register or identify your nickname to services first\r\n")
                                                                         else:
-                                                                            if recipient.lower() in nicknames:
+                                                                            if recipient.lower() in nickname_to_client_mapping_entries:
                                                                                 recip.send(
                                                                                     ":%s!%s@%s %s %s :%s\r\n" %
                                                                                     (self._nickname, self._username,
@@ -4147,9 +4058,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         if param[2].lower() in channels:
                                             chanid = channels[param[2].lower()]
                                             if self._nickname.lower() in chanid._users:
-                                                if param[1].lower() in nicknames:
+                                                if param[1].lower() in nickname_to_client_mapping_entries:
                                                     if self._nickname.lower() in chanid._op or self._nickname.lower() in chanid._owner:
-                                                        cid = nicknames[param[1].lower()]
+                                                        cid = nickname_to_client_mapping_entries[param[1].lower()]
                                                         if cid._MODE_inviteblock:
                                                             raw(self, "998", self._nickname,
                                                                 cid._nickname, chanid.channelname)
@@ -4473,7 +4384,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                             chanid._founder = _founder
 
                                                             for each in chanid._users:
-                                                                cclientid = nicknames[each]
+                                                                cclientid = nickname_to_client_mapping_entries[each]
                                                                 cclientid.send(
                                                                     ":%s MODE %s +r\r\n" %
                                                                     (ServerName, chanid.channelname))
@@ -4483,7 +4394,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                     chanid.channelname, self._nickname, self._username,
                                                                     self._hostmask, self.details[0]))
 
-                                                            WriteUsers(MaxLocal, MaxGlobal, False, True)
+                                                            WriteUsers(False, True)
                                                         else:
                                                             self.send(
                                                                 ":%s NOTICE %s :*** Notice -- Channel is already registered\r\n" % (
@@ -4502,7 +4413,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                             _Access.ClearRecords(chanid.channelname, self, "OWNER")
 
                                                             for each in chanid._users:
-                                                                cclientid = nicknames[each]
+                                                                cclientid = nickname_to_client_mapping_entries[each]
                                                                 cclientid.send(
                                                                     ":%s MODE %s -r\r\n" %
                                                                     (ServerName, chanid.channelname))
@@ -4515,7 +4426,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                             if len(chanid._users) == 0:
                                                                 chanid.resetchannel()
 
-                                                            WriteUsers(MaxLocal, MaxGlobal, False, True)
+                                                            WriteUsers(False, True)
                                                         else:
                                                             self.send(
                                                                 ":%s NOTICE %s :*** Notice -- Channel is not registered\r\n" % (
@@ -4617,9 +4528,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                                             self._hostmask,
                                                                                             self.details[0]))
 
-                                                                                WriteUsers(
-                                                                                    MaxLocal, MaxGlobal, False, False,
-                                                                                    True)
+                                                                                WriteUsers(False, False, True)
 
                                                                             elif _addrec == -1:
                                                                                 raw(self, "914",
@@ -4656,8 +4565,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                                         self._hostmask,
                                                                                         self.details[0]))
 
-                                                                            WriteUsers(MaxLocal, MaxGlobal,
-                                                                                       False, False, True)
+                                                                            WriteUsers(False, False, True)
 
                                                                         elif _delrec == -1:
                                                                             raw(self, "915", self._nickname, ret)
@@ -4680,7 +4588,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                                 self._username, self._hostmask,
                                                                                 self.details[0]))
 
-                                                                    WriteUsers(MaxLocal, MaxGlobal, False, False, True)
+                                                                    WriteUsers(False, False, True)
 
                                                             elif len(param) > 2:
                                                                 _Access.ClearRecords(ret, self)
@@ -4690,7 +4598,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                             self._nickname, self._username,
                                                                             self._hostmask, self.details[0]))
 
-                                                                WriteUsers(MaxLocal, MaxGlobal, False, False, True)
+                                                                WriteUsers(False, False, True)
 
                                                         elif param[2].upper() == "LIST":
                                                             raw(self, "803", self._nickname, ret)
@@ -5040,7 +4948,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     isop = True
 
                                                 for each in chanid._users:
-                                                    cid = nicknames[each]
+                                                    cid = nickname_to_client_mapping_entries[each]
                                                     if isop:
                                                         cid.send(":%s!%s@%s MODE %s -o %s\r\n" %
                                                                  (self._nickname, self._username, self._hostmask,
@@ -5060,7 +4968,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     isowner = True
 
                                                 for each in chanid._users:
-                                                    cid = nicknames[each]
+                                                    cid = nickname_to_client_mapping_entries[each]
                                                     if isowner:
                                                         cid.send(":%s!%s@%s MODE %s -q %s\r\n" %
                                                                  (self._nickname, self._username, self._hostmask,
@@ -5112,11 +5020,11 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                             while iloop < len(param[2].split(",")):
                                                 _kicknick = param[2].split(",")[iloop].lower()
 
-                                                if _kicknick in nicknames:
+                                                if _kicknick in nickname_to_client_mapping_entries:
                                                     if _kicknick in chanid._users:
 
                                                         if len(kickmsg) < 128:
-                                                            cid = nicknames[_kicknick]
+                                                            cid = nickname_to_client_mapping_entries[_kicknick]
 
                                                             if cid._nickname.lower() in operator_entries and self._nickname.lower() not in operator_entries:
                                                                 raw(self, "481", self._nickname,
@@ -5325,7 +5233,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     if opid.operator_level > topid:
                                                         boolShowIP = True
 
-                                                raw(self, "302", self._nickname, nicknames[t_nick], boolShowIP)
+                                                raw(self, "302", self._nickname, nickname_to_client_mapping_entries[t_nick], boolShowIP)
                                             else:
                                                 self.send(":" + ServerName + " 302 " + self._nickname + " :\r\n")
 
@@ -5366,7 +5274,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                             if isSecret(chanid, "private",
                                                         "hidden") == False or self._nickname.lower() in chanid._users or self._nickname.lower() in operator_entries:
                                                 for each in chanid._users:
-                                                    _whouser = nicknames[each]
+                                                    _whouser = nickname_to_client_mapping_entries[each]
                                                     whostring = Whouser(_whouser, chanid.channelname.lower(), self)
                                                     if whostring != "":
                                                         raw(self, "352", self._nickname, whostring)
@@ -5387,8 +5295,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                             who_count = 0
                                             tempAccessObj = Access()
                                             param[1] = tempAccessObj.CreateMaskString(_who)
-                                            for each in nicknames:
-                                                nickid = nicknames[each]
+                                            for each in nickname_to_client_mapping_entries:
+                                                nickid = nickname_to_client_mapping_entries[each]
                                                 if tempAccessObj.MatchAccess(param[1], nickid, useIP):
                                                     who_count += 1
                                                     if who_count == 20 and self._nickname.lower() not in operator_entries:
@@ -5412,8 +5320,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                             kill_count = 0
                                             tempAccessObj = Access()
                                             param[1] = tempAccessObj.CreateMaskString(param[1].lower())
-                                            for each in nicknames:
-                                                nickid = nicknames[each]
+                                            for each in nickname_to_client_mapping_entries:
+                                                nickid = nickname_to_client_mapping_entries[each]
                                                 if tempAccessObj.MatchAccess(param[1], nickid):
                                                     kill_count += 1
                                                     if kill_count == 5:
@@ -5527,8 +5435,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 _recipient = param[1].split(",")[iloop].lower()
                                                 if _recipient.lower() not in recips:
                                                     recips.append(_recipient.lower())
-                                                    if _recipient in nicknames:
-                                                        nick = nicknames[_recipient]
+                                                    if _recipient in nickname_to_client_mapping_entries:
+                                                        nick = nickname_to_client_mapping_entries[_recipient]
                                                         if self.selfaccess(nick):
                                                             nick.send(
                                                                 ":%s!%s@%s %s %s %s :%s\r\n" %
@@ -5547,7 +5455,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                         self._nickname.lower(),
                                                                         chan.channelname.lower()) or self._nickname.lower() in chan._voice:
                                                                     for each in chan._users:
-                                                                        cid = nicknames[each.lower()]
+                                                                        cid = nickname_to_client_mapping_entries[each.lower()]
                                                                         if cid != self:  # x  ! x  @ x DATA target
                                                                             cid.send(":%s!%s@%s %s %s %s :%s\r\n" %
                                                                                      (self._nickname, self._username,
@@ -5606,8 +5514,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                         chan = channels[each.lower()]
                         temp = dict(chan._users)
                         for n in temp:
-                            if n in nicknames:
-                                nick = nicknames[n.lower()]
+                            if n in nickname_to_client_mapping_entries:
+                                nick = nickname_to_client_mapping_entries[n.lower()]
                                 if nick not in sendto and nick._nickname.lower() != self._nickname.lower():
                                     if self._nickname.lower() not in chan._watch:
                                         if chan.MODE_auditorium == False or isOp(
@@ -5658,7 +5566,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
             for each in temp_opers:
                 opid = temp_opers[each.lower()]
                 if opid.watchserver or opid.watchbans:
-                    cid = nicknames[each.lower()]
+                    cid = nickname_to_client_mapping_entries[each.lower()]
                     try:
                         if self.quittype == 9:
                             if opid.watchbans:
@@ -5688,8 +5596,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
             except:
                 print("some channel error")
 
-        if self in invisible:
-            invisible.remove(self)
+        if self in invisible_client_entries:
+            invisible_client_entries.remove(self)
+
         if self._nickname.lower() in operator_entries:
             opid = operator_entries[self._nickname.lower()]
             opid.usage = False
@@ -5697,8 +5606,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
         if self._nickname.lower() in nickmute:
             del nickmute[self._nickname.lower()]  # log on affirmed, now nicknames can take over
-        if self._nickname.lower() in nicknames:
-            del nicknames[self._nickname.lower()]
+        if self._nickname.lower() in nickname_to_client_mapping_entries:
+            del nickname_to_client_mapping_entries[self._nickname.lower()]
 
         if self in connections:
             connections.remove(self)
@@ -5706,8 +5615,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
             unknownConnections.remove(self)
         if self in temp_noopers:
             temp_noopers.remove(self)
-        if self in opersecret:
-            opersecret.remove(self)
+        if self in secret_client_entries:
+            secret_client_entries.remove(self)
         try:
             del self._watch, self._access
             self.close()
@@ -5922,20 +5831,20 @@ def Nick_function(self: ClientConnecting, param):
                         operator_entries[temp_nick.lower()] = operator_entries[self._nickname.lower()]
                         del operator_entries[self._nickname.lower()]
 
-                    if self._nickname.lower() in nicknames:
-                        del nicknames[self._nickname.lower()]
+                    if self._nickname.lower() in nickname_to_client_mapping_entries:
+                        del nickname_to_client_mapping_entries[self._nickname.lower()]
 
                     temp_oldnick = self._nickname
 
                     self._nickname = temp_nick
 
                     if self._welcome == True:
-                        nicknames[self._nickname.lower()] = self  # update entry from dictionary
+                        nickname_to_client_mapping_entries[self._nickname.lower()] = self  # update entry from dictionary
 
                     if self._logoncheck():
                         self._sendwelcome()
 
-                    if self._nickname.lower() in nicknames:
+                    if self._nickname.lower() in nickname_to_client_mapping_entries:
 
                         is_groupednick = False
 
@@ -6030,7 +5939,7 @@ def Mode_function(self, param, strdata=""):
                                                 self._nickname, self._username, self._hostmask, chan.channelname)
 
                                         for each in chan._users:
-                                            cclientid = nicknames[each]
+                                            cclientid = nickname_to_client_mapping_entries[each]
                                             cclientid.send(szModestr)
 
                                     elif param[2][iloop] == "l":
@@ -6049,13 +5958,13 @@ def Mode_function(self, param, strdata=""):
                                                 self._nickname, self._username, self._hostmask, chan.channelname)
 
                                         for each in chan._users:
-                                            cclientid = nicknames[each]
+                                            cclientid = nickname_to_client_mapping_entries[each]
                                             cclientid.send(szModestr)
 
                                     elif param[2][iloop] == "o":
                                         isowner = False
-                                        if param[paramloop].lower() in nicknames:
-                                            cid = nicknames[param[paramloop].lower()]
+                                        if param[paramloop].lower() in nickname_to_client_mapping_entries:
+                                            cid = nickname_to_client_mapping_entries[param[paramloop].lower()]
                                             if cid._nickname.lower() in chan._users:
                                                 if self._nickname.lower() in chan._op and cid._nickname.lower() in chan._owner and cid != self:
                                                     raw(self, "485", self._nickname, chan.channelname)
@@ -6085,7 +5994,7 @@ def Mode_function(self, param, strdata=""):
                                                                     elif x.lower() in chan._owner:
                                                                         pass
                                                                     else:
-                                                                        nickid = nicknames[x]
+                                                                        nickid = nickname_to_client_mapping_entries[x]
                                                                         if cid != nickid:
                                                                             if isOp(cid._nickname,
                                                                                     chan.channelname) == False and SetMode:
@@ -6129,7 +6038,7 @@ def Mode_function(self, param, strdata=""):
                                                                 isowner = True
 
                                                             for each in chan._users:
-                                                                cclientid = nicknames[each.lower()]
+                                                                cclientid = nickname_to_client_mapping_entries[each.lower()]
                                                                 # if chan.MODE_auditorium == False or isOp(cclientid._nickname,chan.channelname) or cid == cclientid:
                                                                 if chan.MODE_auditorium and SetMode == False and isOp(
                                                                         cclientid._nickname, chan.channelname) == False:
@@ -6164,8 +6073,8 @@ def Mode_function(self, param, strdata=""):
                                             raw(self, "401", self._nickname, param[paramloop])
 
                                     elif param[2][iloop] == "v":
-                                        if param[paramloop].lower() in nicknames:
-                                            cid = nicknames[param[paramloop].lower()]
+                                        if param[paramloop].lower() in nickname_to_client_mapping_entries:
+                                            cid = nickname_to_client_mapping_entries[param[paramloop].lower()]
                                             if cid._nickname.lower() in chan._users:
                                                 if self._nickname.lower() in chan._op and cid._nickname.lower() in chan._owner and SetMode == False:
                                                     raw(self, "485", self._nickname, chan.channelname)
@@ -6179,7 +6088,7 @@ def Mode_function(self, param, strdata=""):
                                                             chan._voice.remove(cid._nickname.lower())
 
                                                     for each in chan._users:
-                                                        cclientid = nicknames[each.lower()]
+                                                        cclientid = nickname_to_client_mapping_entries[each.lower()]
                                                         if chan.MODE_auditorium == False or isOp(
                                                                 cclientid._nickname,
                                                                 chan.channelname) or cclientid == cid:
@@ -6200,8 +6109,8 @@ def Mode_function(self, param, strdata=""):
                                         else:
                                             isop = False
                                             if self._nickname.lower() in chan._owner or Override:
-                                                if param[paramloop].lower() in nicknames:
-                                                    cid = nicknames[param[paramloop].lower()]
+                                                if param[paramloop].lower() in nickname_to_client_mapping_entries:
+                                                    cid = nickname_to_client_mapping_entries[param[paramloop].lower()]
                                                     if cid._nickname.lower() in chan._users:
                                                         opid = 0
                                                         copid = 0
@@ -6232,7 +6141,7 @@ def Mode_function(self, param, strdata=""):
                                                                         elif x.lower() in chan._owner:
                                                                             pass
                                                                         else:
-                                                                            nickid = nicknames[x]
+                                                                            nickid = nickname_to_client_mapping_entries[x]
                                                                             if cid != nickid:
                                                                                 if isOp(cid._nickname,
                                                                                         chan.channelname) == False and SetMode:
@@ -6279,7 +6188,7 @@ def Mode_function(self, param, strdata=""):
                                                                     isop = True
 
                                                                 for each in chan._users:
-                                                                    cclientid = nicknames[each]
+                                                                    cclientid = nickname_to_client_mapping_entries[each]
                                                                     if chan.MODE_auditorium and SetMode == False and isOp(
                                                                             cclientid._nickname,
                                                                             chan.channelname) == False:
@@ -6368,7 +6277,7 @@ def Mode_function(self, param, strdata=""):
                                                     raw(self, "913", self._nickname, chan.channelname)
                                         if _rec == 1:
                                             for each in chan._users:
-                                                cclientid = nicknames[each]
+                                                cclientid = nickname_to_client_mapping_entries[each]
                                                 cclientid.send(
                                                     ":%s!%s@%s MODE %s %sb %s\r\n" %
                                                     (self._nickname, self._username, self._hostmask, chan.channelname,
@@ -6409,7 +6318,7 @@ def Mode_function(self, param, strdata=""):
                                         chan.MODE_ownersetaccess = False
 
                                     for each in chan._users:
-                                        cclientid = nicknames[each]
+                                        cclientid = nickname_to_client_mapping_entries[each]
                                         cclientid.send(
                                             ":%s!%s@%s MODE %s %s%s\r\n" %
                                             (self._nickname, self._username, self._hostmask, chan.channelname,
@@ -6433,7 +6342,7 @@ def Mode_function(self, param, strdata=""):
                                         chan.MODE_ownersetmode = False
 
                                     for each in chan._users:
-                                        cclientid = nicknames[each]
+                                        cclientid = nickname_to_client_mapping_entries[each]
                                         cclientid.send(
                                             ":%s!%s@%s MODE %s %s%s\r\n" %
                                             (self._nickname, self._username, self._hostmask, chan.channelname,
@@ -6454,7 +6363,7 @@ def Mode_function(self, param, strdata=""):
                                         chan.MODE_ownersetprop = False
 
                                     for each in chan._users:
-                                        cclientid = nicknames[each]
+                                        cclientid = nickname_to_client_mapping_entries[each]
                                         cclientid.send(
                                             ":%s!%s@%s MODE %s %s%s\r\n" %
                                             (self._nickname, self._username, self._hostmask, chan.channelname,
@@ -6480,7 +6389,7 @@ def Mode_function(self, param, strdata=""):
                                         chan.MODE_ownertopic = False
 
                                     for each in chan._users:
-                                        cclientid = nicknames[each]
+                                        cclientid = nickname_to_client_mapping_entries[each]
                                         cclientid.send(
                                             ":%s!%s@%s MODE %s %s%s%s\r\n" %
                                             (self._nickname, self._username, self._hostmask, chan.channelname,
@@ -6505,7 +6414,7 @@ def Mode_function(self, param, strdata=""):
                                         chan.MODE_ownerkick = False
 
                                     for each in chan._users:
-                                        cclientid = nicknames[each]
+                                        cclientid = nickname_to_client_mapping_entries[each]
                                         cclientid.send(
                                             ":%s!%s@%s MODE %s %s%s\r\n" %
                                             (self._nickname, self._username, self._hostmask, chan.channelname,
@@ -6522,7 +6431,7 @@ def Mode_function(self, param, strdata=""):
                                     chan.MODE_createclone = False
 
                                 for each in chan._users:
-                                    cclientid = nicknames[each]
+                                    cclientid = nickname_to_client_mapping_entries[each]
                                     cclientid.send(
                                         ":%s!%s@%s MODE %s %s%s\r\n" %
                                         (self._nickname, self._username, self._hostmask, chan.channelname,
@@ -6540,7 +6449,7 @@ def Mode_function(self, param, strdata=""):
                                     chan.MODE_authenticatedclients = False
 
                                 for each in chan._users:
-                                    cclientid = nicknames[each]
+                                    cclientid = nickname_to_client_mapping_entries[each]
                                     cclientid.send(
                                         ":%s!%s@%s MODE %s %s%s\r\n" %
                                         (self._nickname, self._username, self._hostmask, chan.channelname,
@@ -6558,7 +6467,7 @@ def Mode_function(self, param, strdata=""):
                                     chan.MODE_servicechan = False
 
                                 for each in chan._users:
-                                    cclientid = nicknames[each]
+                                    cclientid = nickname_to_client_mapping_entries[each]
                                     cclientid.send(
                                         ":%s!%s@%s MODE %s %s%s\r\n" %
                                         (self._nickname, self._username, self._hostmask, chan.channelname,
@@ -6577,7 +6486,7 @@ def Mode_function(self, param, strdata=""):
                                         chan.MODE_Adminonly = False
 
                                     for each in chan._users:
-                                        cclientid = nicknames[each]
+                                        cclientid = nickname_to_client_mapping_entries[each]
                                         cclientid.send(
                                             ":%s!%s@%s MODE %s %s%s\r\n" %
                                             (self._nickname, self._username, self._hostmask, chan.channelname,
@@ -6800,7 +6709,7 @@ def Mode_function(self, param, strdata=""):
 
                                 if szModestr:
                                     for each in chan._users:
-                                        cclientid = nicknames[each]
+                                        cclientid = nickname_to_client_mapping_entries[each]
                                         cclientid.send(szModestr)
 
                             else:
@@ -6836,14 +6745,14 @@ def Mode_function(self, param, strdata=""):
                     if SetMode:
                         if "i" not in self._MODE_:
                             self._MODE_ = self._MODE_ + "i"
-                        if self not in invisible:
-                            invisible.append(self)
+                        if self not in invisible_client_entries:
+                            invisible_client_entries.add(self)
                         self._MODE_invisible = True
 
                     else:
                         self._MODE_ = self._MODE_.replace("i", "")
-                        if self in invisible:
-                            invisible.remove(self)
+                        if self in invisible_client_entries:
+                            invisible_client_entries.remove(self)
                         self._MODE_invisible = False
 
                     self.send(":%s!%s@%s MODE %s %s%s\r\n" % (self._nickname, self._username,
@@ -6944,7 +6853,7 @@ def Mode_function(self, param, strdata=""):
                                             chanid._owner.append(self._nickname.lower())
                                         identify = True
                                         for nick in chanid._users:
-                                            nickid = nicknames[nick]
+                                            nickid = nickname_to_client_mapping_entries[nick]
                                             if isop:
                                                 nickid.send(
                                                     ":%s!%s@%s MODE %s -o %s\r\n" %
@@ -6963,7 +6872,7 @@ def Mode_function(self, param, strdata=""):
                                         chanid._op.append(self._nickname.lower())
                                     identify = True
                                     for nick in chanid._users:
-                                        nickid = nicknames[nick]
+                                        nickid = nickname_to_client_mapping_entries[nick]
                                         if isowner:
                                             nickid.send(
                                                 ":%s!%s@%s MODE %s -q %s\r\n" %
@@ -7086,14 +6995,14 @@ def Mode_function(self, param, strdata=""):
                         opid = operator_entries[self._nickname.lower()]
                         if SetMode:
                             opid.hidden = True
-                            if self not in opersecret:
-                                opersecret.append(self)
+                            if self not in secret_client_entries:
+                                secret_client_entries.add(self)
                             if "s" not in self._MODE_:
                                 self._MODE_ = self._MODE_ + "s"
                         else:
                             opid.hidden = False
-                            if self in opersecret:
-                                opersecret.remove(self)
+                            if self in secret_client_entries:
+                                secret_client_entries.remove(self)
                             self._MODE_ = self._MODE_.replace("s", "")
 
                         self.send(":%s!%s@%s MODE %s %s%s\r\n" % (self._nickname, self._username,
@@ -7154,8 +7063,8 @@ def Mode_function(self, param, strdata=""):
                                 if self._MODE_register == False:  # no longer oper, conform to nickserv modes
                                     self._username = PrefixChar + self._username
 
-                                if self in opersecret:
-                                    opersecret.remove(self)
+                                if self in secret_client_entries:
+                                    secret_client_entries.remove(self)
                                 opid.guide = False
                                 opid.usage = False
                                 opid.hidden = False
@@ -7178,10 +7087,10 @@ def Mode_function(self, param, strdata=""):
 
                 iloop += 1
 
-    elif param[1].lower() in nicknames:
+    elif param[1].lower() in nickname_to_client_mapping_entries:
         if len(param) == 2:
             if self._nickname.lower() in operator_entries:
-                raw(self, "221", nicknames[param[1].lower()]._nickname, nicknames[param[1].lower()]._MODE_)
+                raw(self, "221", nickname_to_client_mapping_entries[param[1].lower()]._nickname, nickname_to_client_mapping_entries[param[1].lower()]._MODE_)
             else:
                 raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
         else:
@@ -7285,7 +7194,7 @@ def Nickserv_function(self, param, msgtype=""):
                             ("NickServ", "NickServ", NetworkName, replyType, self._nickname, passw))
                         self._MODE_register = True
 
-                        WriteUsers(MaxLocal, MaxGlobal, True, False)
+                        WriteUsers(True, False)
                         if self._username[0] == PrefixChar:
                             self._username = self._username[1:]
                         if "r" not in self._MODE_:
@@ -7443,9 +7352,9 @@ def Nickserv_function(self, param, msgtype=""):
                     writehash1 = sha256((passw + NickservParam).encode('utf-8'))
 
                     if writehash1.hexdigest() == ns._password:
-                        if nickn.lower() in nicknames:
+                        if nickn.lower() in nickname_to_client_mapping_entries:
 
-                            cid = nicknames[nickn.lower()]
+                            cid = nickname_to_client_mapping_entries[nickn.lower()]
 
                             sendto = [cid]
 
@@ -7466,8 +7375,8 @@ def Nickserv_function(self, param, msgtype=""):
                             for each in cid._channels:
                                 chan = channels[each.lower()]
                                 for n in chan._users:
-                                    if n in nicknames:
-                                        nick = nicknames[n.lower()]
+                                    if n in nickname_to_client_mapping_entries:
+                                        nick = nickname_to_client_mapping_entries[n.lower()]
                                         if nick not in sendto:
                                             if cid._nickname.lower() not in chan._watch:
                                                 if chan.MODE_auditorium == False or isOp(n, chan.channelname):
@@ -7533,8 +7442,8 @@ def Nickserv_function(self, param, msgtype=""):
                     self.send(":%s!%s@%s %s %s :Email address: %s\r\n" %
                               ("NickServ", "NickServ", NetworkName, replyType, self._nickname, emailaddress))
                     onlineStatus = "Online but not identified (could be a clone)"
-                    if nickn.lower() in nicknames:
-                        nick_id = nicknames[nickn.lower()]
+                    if nickn.lower() in nickname_to_client_mapping_entries:
+                        nick_id = nickname_to_client_mapping_entries[nickn.lower()]
                         if "r" in nick_id._MODE_:
                             onlineStatus = "\x02Online and identified!\x02"
                     else:
@@ -7585,7 +7494,7 @@ def Nickserv_function(self, param, msgtype=""):
                                           ("NickServ", "NickServ", NetworkName, replyType, self._nickname,
                                            nid._nickname))
                                 nid.virtual_host = ""
-                                WriteUsers(MaxLocal, MaxGlobal, True, False)
+                                WriteUsers(True, False)
                             else:
                                 self.send(":%s!%s@%s %s %s :%s does not have a \x02vhost\x02 assigned\r\n" %
                                           ("NickServ", "NickServ", NetworkName, replyType, self._nickname,
@@ -7602,12 +7511,12 @@ def Nickserv_function(self, param, msgtype=""):
                             if opid.operator_level >= nid._level or self._nickname.lower() == nid._nickname.lower() and self._MODE_register:
                                 if self._validate(value.replace(".", "a").replace("/", "a")):
                                     nid.virtual_host = value
-                                    WriteUsers(MaxLocal, MaxGlobal, True, False)
+                                    WriteUsers(True, False)
                                     self.send(":%s!%s@%s %s %s :A \x02vhost\x02 has been assigned to %s\r\n" %
                                               ("NickServ", "NickServ", NetworkName, replyType, self._nickname,
                                                nid._nickname))
-                                    if nickn.lower() in nicknames:
-                                        cid = nicknames[nickn.lower()]
+                                    if nickn.lower() in nickname_to_client_mapping_entries:
+                                        cid = nickname_to_client_mapping_entries[nickn.lower()]
                                         if cid._MODE_register and cid != self:  # if they are registered
                                             cid.send(
                                                 ":%s!%s@%s %s %s :A \x02vhost\x02 has been assigned to your registered nickname\r\n" %
@@ -7630,12 +7539,12 @@ def Nickserv_function(self, param, msgtype=""):
                                 self.send(
                                     ":%s!%s@%s %s %s :Nickserv will now display your email on information requests\r\n" %
                                     ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
-                                WriteUsers(MaxLocal, MaxGlobal, True, False)
+                                WriteUsers(True, False)
                             elif value == "off":
                                 nid.show_email = "False"
                                 self.send(":%s!%s@%s %s %s :Nickserv will no longer display your email\r\n" %
                                           ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
-                                WriteUsers(MaxLocal, MaxGlobal, True, False)
+                                WriteUsers(True, False)
                             else:
                                 self.send(":%s!%s@%s %s %s :SET <nickname> \x02SHOWEMAIL\x02 \x1Fon/off\x1F\r\n" %
                                           ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
@@ -7653,11 +7562,11 @@ def Nickserv_function(self, param, msgtype=""):
 
                             if writehash1.hexdigest() == nid._password:
                                 nid._password = writehash2.hexdigest()
-                                WriteUsers(MaxLocal, MaxGlobal, True, False)
+                                WriteUsers(True, False)
                                 self.send(":%s!%s@%s %s %s :Nickserv password has been changed successfully\r\n" %
                                           ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
-                                if nickn.lower() in nicknames:
-                                    cid = nicknames[nickn.lower()]
+                                if nickn.lower() in nickname_to_client_mapping_entries:
+                                    cid = nickname_to_client_mapping_entries[nickn.lower()]
                                     if cid._MODE_register:
                                         cid.send(
                                             ":%s!%s@%s %s %s :Your nickname \x02password\x02 has been changed to \x02%s\x02\r\n" %
@@ -7693,7 +7602,7 @@ def Nickserv_function(self, param, msgtype=""):
                             nid.grouped_nicknames.remove(self._nickname.lower())
                             self.send(":%s!%s@%s %s %s :That nickname is now ungrouped\r\n" %
                                       ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
-                            WriteUsers(MaxLocal, MaxGlobal, True, False)
+                            WriteUsers(True, False)
                     else:
                         self.send(":%s!%s@%s %s %s :Error: Invalid password\r\n" %
                                   ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
@@ -7733,7 +7642,7 @@ def Nickserv_function(self, param, msgtype=""):
                                         "NickServ", "NickServ", NetworkName, replyType, self._nickname, "NickServ",
                                         "NickServ", NetworkName, replyType, self._nickname, self._nickname,
                                         nid._nickname))
-                                WriteUsers(MaxLocal, MaxGlobal, True, False)
+                                WriteUsers(True, False)
                                 self._MODE_register = True
 
                                 if self._username[0] == PrefixChar:
@@ -7795,8 +7704,8 @@ def Nickserv_function(self, param, msgtype=""):
                                     dropn = False
 
                             if dropn:
-                                if ns._nickname.lower() in nicknames:
-                                    cid = nicknames[ns._nickname.lower()]
+                                if ns._nickname.lower() in nickname_to_client_mapping_entries:
+                                    cid = nickname_to_client_mapping_entries[ns._nickname.lower()]
                                     if cid._MODE_register:
                                         cid._MODE_.replace("r", "")
                                         cid._MODE_register = False
@@ -7812,7 +7721,7 @@ def Nickserv_function(self, param, msgtype=""):
                                                      ("NickServ", "NickServ", NetworkName, replyType, cid._nickname))
 
                                 del nickserv_entries[nickn.lower()]
-                                WriteUsers(MaxLocal, MaxGlobal, True, False)
+                                WriteUsers(True, False)
                                 self.send(":%s!%s@%s %s %s :The nickname \x02%s\x02 has been dropped\r\n" %
                                           (
                                           "NickServ", "NickServ", NetworkName, replyType, self._nickname, ns._nickname))
@@ -7994,12 +7903,6 @@ def pyRCXsetup():
         createfile = open("pyRCX/database/Nickserv.dat", "w")
         createfile.close()
 
-    if not os.path.isfile("pyRCX/database/users.dat"):
-        print("*** Could not find previous historic user counts, history being setup")
-        createfile = open("pyRCX/database/users.dat", "w")
-        createfile.write("1\n1")
-        createfile.close()
-
 
 def SetupListeningSockets():
     global currentports
@@ -8025,16 +7928,16 @@ def start():
     print("")
 
     # TODO fix use of global
-    global timeDifference, MaxGlobal, MaxLocal
+    global timeDifference
 
     print("*** Loading pyRCX 3.0.0, checking settings\r\n")
 
     pyRCXsetup()
 
-    readl = GetUsers()
+    statistics.load()
 
-    MaxGlobal = readl[1]
-    MaxLocal = readl[0]
+    # TODO remove this
+    GetUsers()
 
     settings()
 

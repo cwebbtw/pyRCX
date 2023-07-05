@@ -2,9 +2,6 @@ import logging
 import unittest
 import sys
 
-from pickle import loads
-from typing import List
-
 from pyRCX import server
 
 
@@ -29,7 +26,7 @@ class ChannelTest(unittest.TestCase):
         server.channels = {"#somewhere": channel_information}
 
         # When
-        server.WriteUsers("1", "1", False, True, False)
+        server.WriteUsers(False, True, False)
 
         server.channels = {}
 

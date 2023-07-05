@@ -1,9 +1,11 @@
 import logging
-import unittest
+import os
 import sys
+import unittest
 
 from pickle import loads
 from typing import List
+from unittest.mock import MagicMock
 
 from pyRCX import access, server
 
@@ -19,13 +21,15 @@ class AccessTest(unittest.TestCase):
     def setUp(self):
         logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
+        server.statistics = MagicMock()
+
     def test_write_users_should_save_access(self):
         # Given
         access_information = access.AccessInformation("#somewhere", "OWNER", "*", "a@b", 0, "tag", 2)
         server.ServerAccess = [access_information]
 
         # When
-        server.WriteUsers("1", "1", False, False, True)
+        server.WriteUsers(False, False, True)
 
         # Then
         with open("pyRCX/database/access.dat", "rb") as file:
