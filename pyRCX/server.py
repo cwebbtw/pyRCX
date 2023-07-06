@@ -29,6 +29,8 @@ from struct import unpack
 # This class needs a major re-work including the nested hierarchy of threading/run methods
 from .clientbase import ClientBaseClass
 
+from .commands.channel import JoinCommand
+
 from .nickserv import NickServEntry
 from .operator import OperatorEntry
 from .filtering import FilterEntry, Filtering
@@ -39,6 +41,9 @@ from .raw import Raw
 filtering: Filtering = Filtering()
 
 channel_entries: Dict = {}
+
+# Command definitions - to be added to a context class properly
+join_command = JoinCommand(channel_entries)
 
 nickserv_entries: Dict[str, NickServEntry] = {}
 operator_entries: Dict[str, OperatorEntry] = {}
@@ -129,8 +134,21 @@ class ServerInformation:
         self._authenticated = False
 
 
-class ChannelBaseClass:
-    def __init__(self):
+class Channel:
+    """
+    The channel object has:
+
+        modes
+        all users
+        users that are hosts (@)
+        users that are owners (.)
+        users that are voiced (+)
+        properties
+        access (at the channel level)
+        topic
+    """
+
+    def __init__(self, channelname, joinuser, creationmodes=""):
         self._users = {}
         self._watch = []
         self._prop = None
@@ -183,6 +201,63 @@ class ChannelBaseClass:
         self.MODE_limitamount = "75"
         self.MODE_limit = False
         self.MODE_key = ""
+
+        self.channelname = channelname
+        if joinuser != "" and self.__validate(channelname, joinuser) == False:
+            if joinuser != "":
+                cclientid = nickname_to_client_mapping_entries[joinuser.lower()]
+                cclientid.send(":%s 706 %s :Channel name is not valid\r\n" % (server_name, cclientid._nickname))
+
+            delGlobalChannel(self.channelname.lower())
+
+            self.channelname = ""
+        else:
+            cclientid = None
+            if creationmodes == "":
+                creationmodes = DefaultModes
+
+            if "Z" in creationmodes:
+                self.MODE_noircx = True
+
+            if joinuser != "":
+                self._users[joinuser.lower()] = nickname_to_client_mapping_entries[joinuser.lower()]
+                cclientid = nickname_to_client_mapping_entries[joinuser.lower()]
+
+            if joinuser != "":
+                if self.MODE_noircx == False:
+                    self._owner = [cclientid._nickname.lower()]
+                else:
+                    self._op = [cclientid._nickname.lower()]
+
+            if joinuser != "":
+                self._prop = Prop(channelname, cclientid)  # create instance of prop class
+            else:
+                self._prop = Prop(channelname, server_name)
+
+            if self.channelname[0] == "&":
+                self.localChannel = True
+            if len(self.channelname) >= 2:
+                if self.channelname[0] + self.channelname[1] == "%&":
+                    self.localChannel = True
+
+            setupModes(self, creationmodes)
+
+            if joinuser != "":
+                cclientid._channels.append(self.channelname)
+                cclientid.send(
+                    ":%s!%s@%s JOIN :%s\r\n" %
+                    (cclientid._nickname, cclientid._username, cclientid._hostmask, channelname))
+                self.sendnames(cclientid._nickname, True)
+
+    def __validate(self, channelname, joinuser):
+        chanprefix = "(" + "|".join(ChanPrefix.split(",")) + ")"
+        p = re.compile(f"^{chanprefix}[\u0021-\u002B\u002E-\u00FF\-]{{0,128}}$")
+
+        operator_level = 0
+        if joinuser.lower() in operator_entries:
+            operator_level = operator_entries[joinuser.lower()].operator_level
+
+        return p.match(channelname) == None or not filtering.filter(channelname, "chan", operator_level)
 
     def GetChannelModes(self, objid, nokey=False):
         modestr = ""
@@ -685,7 +760,8 @@ class ChannelBaseClass:
 
             if self._topic != "":
                 raw_messages.raw(cclientid, "332", cclientid._nickname, self.channelname, self._topic)
-                raw_messages.raw(cclientid, "333", cclientid._nickname, self.channelname, self._topic_nick, self._topic_time)
+                raw_messages.raw(cclientid, "333", cclientid._nickname, self.channelname, self._topic_nick,
+                                 self._topic_time)
 
             self.sendnames(cclientid._nickname, False, True)
 
@@ -739,7 +815,8 @@ class ChannelBaseClass:
                         k_numeric = "471"
 
             elif _r == -4:
-                raw_messages.raw(cclientid, "483", cclientid._nickname, self.channelname, "You are not an Administrator")
+                raw_messages.raw(cclientid, "483", cclientid._nickname, self.channelname,
+                                 "You are not an Administrator")
                 if self.MODE_knock:
                     k_numeric = "483"
 
@@ -755,7 +832,7 @@ class ChannelBaseClass:
 
             elif _r == -7:
                 raw_messages.raw(cclientid, "483", cclientid._nickname, self.channelname,
-                    "User with same address already in channel")
+                                 "User with same address already in channel")
                 if self.MODE_knock:
                     k_numeric = "483"
 
@@ -796,7 +873,8 @@ class ChannelBaseClass:
 
             if self.MODE_gagonban:
                 if self.isBanned(cclientid):
-                    raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname, "Cannot send to channel whilst banned")
+                    raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname,
+                                     "Cannot send to channel whilst banned")
                     sendto = False
 
             if self.MODE_profanity:
@@ -810,7 +888,7 @@ class ChannelBaseClass:
                 if foundprofanity:
                     sendto = False
                     raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname,
-                        "Cannot send to channel (filter in use)")
+                                     "Cannot send to channel (filter in use)")
                     cclientid.send(":" + server_name +
                                    " NOTICE SERVER :*** A filter is in use, your last message was blocked\r\n")
 
@@ -1993,67 +2071,6 @@ def setupModes(self, creationmodes_full):
             self.MODE_key = data_key
 
 
-class Channel(ChannelBaseClass):
-    def __validate(self, channelname, joinuser):
-        chanprefix = "(" + "|".join(ChanPrefix.split(",")) + ")"
-        p = re.compile(f"^{chanprefix}[\u0021-\u002B\u002E-\u00FF\-]{{0,128}}$")
-
-        operator_level = 0
-        if joinuser.lower() in operator_entries:
-            operator_level = operator_entries[joinuser.lower()].operator_level
-
-        return p.match(channelname) == None or not filtering.filter(channelname, "chan", operator_level)
-
-    def __init__(self, channelname, joinuser, creationmodes=""):
-        ChannelBaseClass.__init__(self)
-        self.channelname = channelname
-        if joinuser != "" and self.__validate(channelname, joinuser) == False:
-            if joinuser != "":
-                cclientid = nickname_to_client_mapping_entries[joinuser.lower()]
-                cclientid.send(":%s 706 %s :Channel name is not valid\r\n" % (server_name, cclientid._nickname))
-
-            delGlobalChannel(self.channelname.lower())
-
-            self.channelname = ""
-        else:
-            cclientid = None
-            if creationmodes == "":
-                creationmodes = DefaultModes
-
-            if "Z" in creationmodes:
-                self.MODE_noircx = True
-
-            if joinuser != "":
-                self._users[joinuser.lower()] = nickname_to_client_mapping_entries[joinuser.lower()]
-                cclientid = nickname_to_client_mapping_entries[joinuser.lower()]
-
-            if joinuser != "":
-                if self.MODE_noircx == False:
-                    self._owner = [cclientid._nickname.lower()]
-                else:
-                    self._op = [cclientid._nickname.lower()]
-
-            if joinuser != "":
-                self._prop = Prop(channelname, cclientid)  # create instance of prop class
-            else:
-                self._prop = Prop(channelname, server_name)
-
-            if self.channelname[0] == "&":
-                self.localChannel = True
-            if len(self.channelname) >= 2:
-                if self.channelname[0] + self.channelname[1] == "%&":
-                    self.localChannel = True
-
-            setupModes(self, creationmodes)
-
-            if joinuser != "":
-                cclientid._channels.append(self.channelname)
-                cclientid.send(
-                    ":%s!%s@%s JOIN :%s\r\n" %
-                    (cclientid._nickname, cclientid._username, cclientid._hostmask, channelname))
-                self.sendnames(cclientid._nickname, True)
-
-
 Noop = False
 
 _lastError = []
@@ -2551,8 +2568,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                     # print "message ends"
                     _sleep = "%.4f" % (random() / 9)
                     _disabled = self._isDisabled(param[0])
-                    if param[0].upper() != "NOTICE" and param[0].upper() != "PRIVMSG" and param[0].upper() != "JOIN" and \
-                            param[0] != "":
+                    if param[0].upper() != "NOTICE" and param[0].upper() != "PRIVMSG" and param[0].upper() != "JOIN" and param[0] != "":
 
                         if param[0] == "MODE" and len(param) == 2:
                             pass
@@ -4569,6 +4585,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     raw_messages.raw(self, "705", self._nickname, param[1])
 
                                 elif param[0] == "JOIN":
+                                    join_command.execute(param[1:])
+
+                                    # TODO strangle this code
                                     _sleep = "%.4f" % (random() / 9)
                                     time.sleep(float(_sleep))
                                     iloop = 0
