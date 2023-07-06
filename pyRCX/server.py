@@ -1364,7 +1364,11 @@ class Prop:
                     else:
                         stroj = stroj[1:]
 
-                    chanid._prop.onjoin = stroj
+                    if onmsg.upper() == "ONJOIN":
+                        chanid._prop.onjoin = stroj
+                    elif onmsg.upper() == "ONPART":
+                        chanid._prop.onpart = stroj
+
                     for each in chanid._users:
                         cid = nickname_to_client_mapping_entries[each]
                         cid.send(
@@ -2071,6 +2075,67 @@ def setupModes(self, creationmodes_full):
             self.MODE_key = data_key
 
 
+class Channel(ChannelBaseClass):
+    def __validate(self, channelname, joinuser):
+        chanprefix = "(" + "|".join(ChanPrefix.split(",")) + ")"
+        p = re.compile(f"^{chanprefix}[\u0021-\u002B\u002E-\u00FF\-]{{0,128}}$")
+
+        operator_level = 0
+        if joinuser.lower() in operator_entries:
+            operator_level = operator_entries[joinuser.lower()].operator_level
+
+        return p.match(channelname) is not None and not filtering.filter(channelname, "chan", operator_level)
+
+    def __init__(self, channelname, joinuser, creationmodes=""):
+        ChannelBaseClass.__init__(self)
+        self.channelname = channelname
+        if joinuser != "" and self.__validate(channelname, joinuser) == False:
+            if joinuser != "":
+                cclientid = nickname_to_client_mapping_entries[joinuser.lower()]
+                cclientid.send(":%s 706 %s :Channel name is not valid\r\n" % (server_name, cclientid._nickname))
+
+            delGlobalChannel(self.channelname.lower())
+
+            self.channelname = ""
+        else:
+            cclientid = None
+            if creationmodes == "":
+                creationmodes = DefaultModes
+
+            if "Z" in creationmodes:
+                self.MODE_noircx = True
+
+            if joinuser != "":
+                self._users[joinuser.lower()] = nickname_to_client_mapping_entries[joinuser.lower()]
+                cclientid = nickname_to_client_mapping_entries[joinuser.lower()]
+
+            if joinuser != "":
+                if self.MODE_noircx == False:
+                    self._owner = [cclientid._nickname.lower()]
+                else:
+                    self._op = [cclientid._nickname.lower()]
+
+            if joinuser != "":
+                self._prop = Prop(channelname, cclientid)  # create instance of prop class
+            else:
+                self._prop = Prop(channelname, server_name)
+
+            if self.channelname[0] == "&":
+                self.localChannel = True
+            if len(self.channelname) >= 2:
+                if self.channelname[0] + self.channelname[1] == "%&":
+                    self.localChannel = True
+
+            setupModes(self, creationmodes)
+
+            if joinuser != "":
+                cclientid._channels.append(self.channelname)
+                cclientid.send(
+                    ":%s!%s@%s JOIN :%s\r\n" %
+                    (cclientid._nickname, cclientid._username, cclientid._hostmask, channelname))
+                self.sendnames(cclientid._nickname, True)
+
+                
 Noop = False
 
 _lastError = []
