@@ -34,6 +34,7 @@ from .operator import OperatorEntry
 from .filtering import FilterEntry, Filtering
 from .access import AccessInformation
 from .statistics import Statistics
+from .raw import Raw
 
 filtering: Filtering = Filtering()
 
@@ -52,12 +53,16 @@ invisible_client_entries: Set[ClientBaseClass] = set()
 secret_client_entries: Set[ClientBaseClass] = set()
 unknown_connection_entries: Set[ClientBaseClass] = set()
 
+
 statistics: Statistics = Statistics(nickname_to_client_mapping_entries, operator_entries, invisible_client_entries,
                                     secret_client_entries, unknown_connection_entries, channel_entries)
 
+server_name = None
+raw_messages = None
+
 # Here are some settings, these can be coded into the conf later I suppose
 
-character_encoding = "cp1252"
+character_encoding = "latin1"
 
 DefaultModes = "ntl 75"
 
@@ -78,7 +83,6 @@ ServerAddress = ""
 NetworkName = ""
 ServerAdmin1 = ""
 ServerAdmin2 = ""
-ServerName = ""
 ServerPassword = ""
 passmsg = ""
 MaxUsers = 10
@@ -330,7 +334,7 @@ class ChannelBaseClass:
                 cid = getUserOBJ(each)
                 iloop += 1
                 if iloop == 20:
-                    raw(cclientid, "353", cclientid._nickname, self.channelname, str_chanlist[1:])
+                    raw_messages.raw(cclientid, "353", cclientid._nickname, self.channelname, str_chanlist[1:])
                     str_chanlist = ""
                     iloop = 0
 
@@ -390,9 +394,9 @@ class ChannelBaseClass:
                             str_chanlist = str_chanlist + " " + cid._nickname
 
             if str_chanlist != "":
-                raw(cclientid, "353", cclientid._nickname, self.channelname, str_chanlist[1:])
+                raw_messages.raw(cclientid, "353", cclientid._nickname, self.channelname, str_chanlist[1:])
 
-        raw(cclientid, "366", cclientid._nickname, self.channelname)
+        raw_messages.raw(cclientid, "366", cclientid._nickname, self.channelname)
 
     def __remuser(self, nick, sendmsg):  # remove users from the user record for this channel
         if nick.lower() in self._users:
@@ -535,7 +539,7 @@ class ChannelBaseClass:
         cclientid = getUserOBJ(partuser.lower())
         if cclientid:
             if self.__remuser(partuser, True) == False:
-                raw(cclientid, "442", cclientid._nickname, self.channelname)
+                raw_messages.raw(cclientid, "442", cclientid._nickname, self.channelname)
                 return False
             else:
                 cclientid._channels.remove(self.channelname)
@@ -638,25 +642,25 @@ class ChannelBaseClass:
                                 clientid.send(
                                     ":%s!%s@%s JOIN :%s\r\n:%s MODE %s +q %s\r\n" %
                                     (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname,
-                                     ServerName, self.channelname, cclientid._nickname))
+                                     server_name, self.channelname, cclientid._nickname))
                             else:
                                 clientid.send(
                                     ":%s!%s@%s JOIN :%s\r\n:%s MODE %s +o %s\r\n" %
                                     (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname,
-                                     ServerName, self.channelname, cclientid._nickname))
+                                     server_name, self.channelname, cclientid._nickname))
 
                         elif key == self._prop.hostkey and key != "" or joinuser.lower() in self._op:
                             clientid.send(
                                 ":%s!%s@%s JOIN :%s\r\n:%s MODE %s +o %s\r\n" %
                                 (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname,
-                                 ServerName, self.channelname, cclientid._nickname))
+                                 server_name, self.channelname, cclientid._nickname))
                             keyjoin = 1
 
                         elif joinuser.lower() in self._voice and joinuser.lower() not in self._op and joinuser.lower() not in self._owner:
                             clientid.send(
                                 ":%s!%s@%s JOIN :%s\r\n:%s MODE %s +v %s\r\n" %
                                 (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname,
-                                 ServerName, self.channelname, cclientid._nickname))
+                                 server_name, self.channelname, cclientid._nickname))
                         else:
                             clientid.send(
                                 ":%s!%s@%s JOIN :%s\r\n" %
@@ -680,8 +684,8 @@ class ChannelBaseClass:
                     self._voice.append(joinuser.lower())
 
             if self._topic != "":
-                raw(cclientid, "332", cclientid._nickname, self.channelname, self._topic)
-                raw(cclientid, "333", cclientid._nickname, self.channelname, self._topic_nick, self._topic_time)
+                raw_messages.raw(cclientid, "332", cclientid._nickname, self.channelname, self._topic)
+                raw_messages.raw(cclientid, "333", cclientid._nickname, self.channelname, self._topic_nick, self._topic_time)
 
             self.sendnames(cclientid._nickname, False, True)
 
@@ -696,10 +700,10 @@ class ChannelBaseClass:
         else:
             k_numeric = ""
             if _r == -1:
-                raw(cclientid, "927", cclientid._nickname, self.channelname)
+                raw_messages.raw(cclientid, "927", cclientid._nickname, self.channelname)
 
             elif _r == -2:
-                raw(cclientid, "473", cclientid._nickname, self.channelname)
+                raw_messages.raw(cclientid, "473", cclientid._nickname, self.channelname)
                 if self.MODE_knock:
                     k_numeric = "473"
 
@@ -713,7 +717,7 @@ class ChannelBaseClass:
                         if chanid.MODE_cloneroom == False:
                             for each in chanid._users:
                                 cid = getUserOBJ(each.lower())
-                                raw(cid, "934", cid._nickname)  # LINK NOTE: sendRawDataHere
+                                raw_messages.raw(cid, "934", cid._nickname)  # LINK NOTE: sendRawDataHere
 
                             chanid.resetchannel()
                         else:
@@ -730,33 +734,33 @@ class ChannelBaseClass:
                     newchan.join(joinuser)
 
                 else:
-                    raw(cclientid, "471", cclientid._nickname, self.channelname)
+                    raw_messages.raw(cclientid, "471", cclientid._nickname, self.channelname)
                     if self.MODE_knock:
                         k_numeric = "471"
 
             elif _r == -4:
-                raw(cclientid, "483", cclientid._nickname, self.channelname, "You are not an Administrator")
+                raw_messages.raw(cclientid, "483", cclientid._nickname, self.channelname, "You are not an Administrator")
                 if self.MODE_knock:
                     k_numeric = "483"
 
             elif _r == -5:
-                raw(cclientid, "913", cclientid._nickname, self.channelname)
+                raw_messages.raw(cclientid, "913", cclientid._nickname, self.channelname)
                 if self.MODE_knock:
                     k_numeric = "913"
 
             elif _r == -6:
-                raw(cclientid, "477", cclientid._nickname, self.channelname)
+                raw_messages.raw(cclientid, "477", cclientid._nickname, self.channelname)
                 if self.MODE_knock:
                     k_numeric = "477"
 
             elif _r == -7:
-                raw(cclientid, "483", cclientid._nickname, self.channelname,
+                raw_messages.raw(cclientid, "483", cclientid._nickname, self.channelname,
                     "User with same address already in channel")
                 if self.MODE_knock:
                     k_numeric = "483"
 
             elif _r == 0:
-                raw(cclientid, "520", cclientid._nickname, self.channelname)
+                raw_messages.raw(cclientid, "520", cclientid._nickname, self.channelname)
                 if self.MODE_knock:
                     k_numeric = "520"
 
@@ -773,8 +777,8 @@ class ChannelBaseClass:
             sendto = True
 
             if self.channelname in cclientid._watch:
-                raw(cclientid, "404", cclientid._nickname, self.channelname, "Cannot send to channel")
-                cclientid.send(":" + ServerName +
+                raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname, "Cannot send to channel")
+                cclientid.send(":" + server_name +
                                " NOTICE SERVER :*** You are watching this channel, you can't participate\r\n")
                 sendto = False
 
@@ -783,16 +787,16 @@ class ChannelBaseClass:
                     pass
                 else:
                     sendto = False
-                    raw(cclientid, "404", cclientid._nickname, self.channelname, "Cannot send to channel")
+                    raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname, "Cannot send to channel")
 
             elif self.MODE_nocolour:
                 if chr(3) in msg or chr(2) in msg or "\x1F" in msg:
-                    raw(cclientid, "404", cclientid._nickname, self.channelname, "Cannot send to channel")
+                    raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname, "Cannot send to channel")
                     sendto = False
 
             if self.MODE_gagonban:
                 if self.isBanned(cclientid):
-                    raw(cclientid, "404", cclientid._nickname, self.channelname, "Cannot send to channel whilst banned")
+                    raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname, "Cannot send to channel whilst banned")
                     sendto = False
 
             if self.MODE_profanity:
@@ -805,9 +809,9 @@ class ChannelBaseClass:
 
                 if foundprofanity:
                     sendto = False
-                    raw(cclientid, "404", cclientid._nickname, self.channelname,
+                    raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname,
                         "Cannot send to channel (filter in use)")
-                    cclientid.send(":" + ServerName +
+                    cclientid.send(":" + server_name +
                                    " NOTICE SERVER :*** A filter is in use, your last message was blocked\r\n")
 
             if sendto:
@@ -832,7 +836,7 @@ class ChannelBaseClass:
                     time.sleep(0.18)
 
         else:
-            raw(cclientid, "442", cclientid._nickname, self.channelname)
+            raw_messages.raw(cclientid, "442", cclientid._nickname, self.channelname)
 
 
 class Recipient:
@@ -906,7 +910,7 @@ def WriteUsers(nicksv=True, chans=True, access=False):
 def rehash(par=1):  # this information will be rehashed by any operator with level 4 privlidges (Administrator)
     myfile = open("pyRCX/conf/pyRCX.conf", "r")
     try:
-        global ServerAddress, ServerName, NetworkName, connectionsExempt, operlines, profanity, Ports
+        global ServerAddress, server_name, NetworkName, connectionsExempt, operlines, profanity, Ports
         global FloodingExempt, MaxUsers, MaxUsersPerConnection, NickfloodAmount, NickfloodWait
         global NickservParam, NTPServer, ipaddress, ServerAdmin1, ServerAdmin2, AdminPassword, ServerPassword
         global passmsg, HostMaskingParam, HostMasking, PrefixChar, MaxServerEntries, MaxChannelEntries, MaxUserEntries
@@ -932,7 +936,7 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
                 s_line = lineStr.split(":")
 
                 ServerAddress = s_line[1]
-                ServerName = s_line[2]
+                server_name = s_line[2]
                 NetworkName = s_line[3].split(";")[0]
 
             if lineStr[0] == "E":
@@ -1046,552 +1050,6 @@ def unsigned(number):
         return 0
     else:
         return number
-
-
-def raw(param1="", param2="", param3="", param4="", param5="", param6="", param7=""):
-    if param3 == "":
-        param3 = "*"
-
-    if param2 == "001":
-        param1.send(
-            ":" + ServerName + " 001 " + param3 + " :Welcome to the " + param4 + " chat service " + param3 + "\r\n")
-
-    if param2 == "002":
-        param1.send(":" + ServerName + " 002 " + param3 + " :Your host is " + param4 + ", running version 3.0.0\r\n")
-
-    if param2 == "003":
-        param1.send(":" + ServerName + " 003 " + param3 + " :This server was created on %s\r\n" %
-                    (time.strftime("%A %B %d %H:%M:%S %Y GMT", time.localtime())))
-
-    if param2 == "004":
-        param1.send(":" + ServerName + " 004 " + param3 + " " + param4 +
-                    " pyRCX 3.0.0 abAfghiInoOpPrwzX aAbcCdefGhikKlmMnNopPqQrRsStTuvwxXZ\r\n")
-
-    if param2 == "005":
-        if "IRCX" in disabled_functionality:
-            param1.send(
-                ":" + ServerName + " 005 " + param3 + " IRC PREFIX=(ov)@+ NETWORK=" + NetworkName +
-                " are supported by this server\r\n")
-        else:
-            param1.send(
-                ":" + ServerName + " 005 " + param3 + " IRCX PREFIX=(qov).@+ NETWORK=" + NetworkName +
-                " are supported by this server\r\n")
-
-    if param2 == "221":
-        param1.send(":" + ServerName + " 221 " + param3 + " " + param4 + "\r\n")
-
-    if param2 == "251":
-        param1.send(
-            ":" + ServerName + " 251 " + param3 + " :There are " + str(unsigned(len(nickname_to_client_mapping_entries) - len(invisible_client_entries))) +
-            " users and " + str(len(invisible_client_entries)) + " invisible on 1 server\r\n")
-
-    if param2 == "252":
-        if unsigned(len(operator_entries)) - len(secret_client_entries) > 0:
-            param1.send(
-                ":" + ServerName + " 252 " + param3 + " " + str(unsigned(len(operator_entries)) - len(secret_client_entries)) +
-                " :operator(s) online\r\n")  # display if operators available
-
-    if param2 == "253":
-        if len(unknown_connection_entries) > 0:
-            param1.send(":" + ServerName + " 253 " + param3 + " " + str(len(unknown_connection_entries)) +
-                        " :unknown connection(s)\r\n")  # display if operators available
-
-    if param2 == "254":
-        totalchannels = len(channel_entries)
-        if totalchannels > 0:
-            param1.send(":" + ServerName + " 254 " + param3 + " " + str(totalchannels) + " :channels formed\r\n")
-
-    if param2 == "255":
-        param1.send(":" + ServerName + " 255 " + param3 + " :I have " + str(
-            len(nickname_to_client_mapping_entries)) + " client(s) and 1 server\r\n")  # display if operators available
-
-    if param2 == "256":
-        # display if operators available
-        param1.send(":" + ServerName + " 256 " + param3 + " :" + NetworkName + " communications service\r\n")
-
-    if param2 == "257":
-        # display if operators available
-        param1.send(":" + ServerName + " 257 " + param3 + " :pyRCX version 3.0.0, see /CREDITS\r\n")
-
-    if param2 == "258":
-        param1.send(":" + ServerName + " 258 " + param3 + " :" + ServerAdmin1 + "\r\n")
-
-    if param2 == "259":
-        param1.send(":" + ServerName + " 259 " + param3 + " :" + ServerAdmin2 + "\r\n")
-
-    if param2 == "263":
-        param1.send(":" + ServerName + " 263 " + param3 + " :Message too long, restrict your output\r\n")
-
-    if param2 == "265":
-        param1.send(":" + ServerName + " 265 " + param3 + " :Current Local Users: " + str(statistics.current_local_users())
-                                                                                         + "  Max: " + str(
-            statistics.max_local_users()) + "\r\n")  # display if operators available
-
-    if param2 == "266":
-        param1.send(":" + ServerName + " 266 " + param3 + " :Current Global Users: " + str(statistics.current_global_users())
-                                                                                         + "  Max: " + str(
-            statistics.max_global_users()) + "\r\n")  # display if operators available
-
-    if param2 == "301":
-        param1.send(":" + ServerName + " 301 " + param3 + " " + param4._nickname + " " + param4._away + "\r\n")
-
-    if param2 == "302":
-        param1.send(
-            ":" + ServerName + " 302 " + param3 + " :" + param4._nickname + "=+" + param4._username + "@" +
-            iif(param5, param4.details[0],
-                param4._hostmask) + "\r\n")
-
-    if param2 == "303":
-        param1.send(":" + ServerName + " 303 " + param3 + " :" + param4 + "\r\n")
-
-    if param2 == "305":
-        param1.send(":" + ServerName + " 305 " + param3 + " :You are no longer marked as being away\r\n")
-
-    if param2 == "306":
-        param1.send(":" + ServerName + " 306 " + param3 + " :You have been marked as being away\r\n")
-
-    if param2 == "307":
-        param1.send(":" + ServerName + " 307 " + param3 + " " + param4._nickname + " :is registered to services\r\n")
-
-    if param2 == "311":
-        param1.send(
-            ":" + ServerName + " 311 " + param3 + " " + param4._nickname + " " + param4._username + " " + param4._hostmask +
-            " * :" + param4._fullname + "\r\n")
-
-    if param2 == "312":
-        param1.send(
-            ":" + ServerName + " 312 " + param3 + " " + param4._nickname + " " + param4._server + " :" + NetworkName + "\r\n")
-
-    if param2 == "313":
-        opid = getOperOBJ(param4._nickname)
-        if opid != None:
-            if opid.hidden == False:
-                if opid.guide == False:
-                    if "A" in opid.flags:
-                        param1.send(":" + ServerName + " 313 " + param3 + " " + param4._nickname +
-                                    " :is the Network Administrator\r\n")
-
-                    elif "O" in opid.flags:
-                        param1.send(":" + ServerName + " 313 " + param3 + " " + param4._nickname +
-                                    " :is a Server Administrator\r\n")
-
-                    elif "a" in opid.flags:
-                        param1.send(":" + ServerName + " 313 " + param3 + " " + param4._nickname +
-                                    " :is a System Chat Manager\r\n")
-
-                    elif "o" in opid.flags:
-                        param1.send(":" + ServerName + " 313 " + param3 + " " + param4._nickname +
-                                    " :is a System Operator\r\n")
-
-                else:
-                    param1.send(
-                        ":" + ServerName + " 313 " + param3 + " " + param4._nickname + " :is a Guide Operator\r\n")
-
-    if param2 == "315":
-        param1.send(":" + ServerName + " 315 " + param3 + " " + param4 + " :End of /WHO list.\r\n")
-
-    if param2 == "316":
-        param1.send(":" + ServerName + " 316 " + param3 + " " + param4 +
-                    " :is unable to participate because they are on the gag list\r\n")
-
-    if param2 == "317":
-        if param4._MODE_invisible != True or param3.lower() in operator_entries:
-            param1.send(
-                ":" + ServerName + " 317 " + param3 + " " + param4._nickname + " " +
-                str(unsigned(int(GetEpochTime()) - param4._idletime)) + " " + str(param4._signontime) +
-                " :seconds idle, signon time\r\n")
-
-    if param2 == "318":
-        param1.send(":" + ServerName + " 318 " + param3 + " " + param4 + " :End of /WHOIS list\r\n")
-
-    if param2 == "319":
-
-        w_channels = ""
-        cnick = param3.lower()
-        cid = getUserOBJ(cnick)
-        for c in param4._channels:
-
-            if len(w_channels.split(" ")) == 10:
-                param1.send(
-                    ":" + ServerName + " 319 " + param3 + " " + param4._nickname + " :" + w_channels[1:] + "\r\n")
-                w_channels = ""
-
-            chanid = getChannelOBJ(c.lower())
-            if chanid:
-                if isSecret(chanid, "private", "hidden") != True or cnick in chanid._users or getOperOBJ(cnick):
-                    if chanid.MODE_auditorium == False or isOp(
-                            cnick, chanid.channelname) or isOp(
-                        param4._nickname, chanid.channelname):
-
-                        # cid is me
-                        # param4 is them, param 5 is the one who should be hidden if watching channel
-
-                        if chanid.channelname in param4._watch and cid != param4:
-                            pass
-
-                        elif param4._nickname.lower() in chanid._voice and param4._nickname.lower() not in chanid._op and param4._nickname.lower() not in chanid._owner:
-                            w_channels = w_channels + " +" + c
-
-                        elif param4._nickname.lower() in chanid._op:
-                            w_channels = w_channels + " @" + c
-
-                        elif param4._nickname.lower() in chanid._owner:
-                            if cid._IRCX:
-                                w_channels = w_channels + " ." + c
-                            else:
-                                w_channels = w_channels + " @" + c
-                        else:
-                            w_channels = w_channels + " " + c
-
-        if w_channels != "":
-            param1.send(":" + ServerName + " 319 " + param3 + " " + param4._nickname + " :" + w_channels[1:] + "\r\n")
-
-    if param2 == "320":
-        if param4._friendlyname:
-            param1.send(
-                ":" + ServerName + " 320 " + param3 + " " + param4._nickname + " :" + param4._friendlyname + "\r\n")
-
-    if param2 == "321":
-        param1.send(":" + ServerName + " 321 " + param3 + " Channel :Users  Name\r\n")
-
-    if param2 == "322":
-        param1.send(":" + ServerName + " 322 " + param3 + " " + param4 + " " + param5 + " :" + param6 + "\r\n")
-
-    if param2 == "323":
-        param1.send(":" + ServerName + " 323 " + param3 + " :End of /LIST\r\n")
-
-    if param2 == "324":
-        param1.send(":" + ServerName + " 324 " + param3 + " " + param4 + " +" + param5 + "\r\n")
-
-    if param2 == "331":
-        param1.send(":" + ServerName + " 331 " + param3 + " " + param4 + " :No topic is set\r\n")
-
-    if param2 == "332":
-        param1.send(":" + ServerName + " 332 " + param3 + " " + param4 + " :" + param5 + "\r\n")
-
-    if param2 == "333":
-        if param5 == "":
-            param5 = ServerName
-        param1.send(":" + ServerName + " 333 " + param3 + " " + param4 + " " + param5 + " " + str(param6) + "\r\n")
-
-    if param2 == "341":
-        param1.send(":" + ServerName + " 341 " + param3 + " " + param4 + " " + param5 + "\r\n")
-
-    if param2 == "352":
-        param1.send(":" + ServerName + " 352 " + param3 + " " + param4 + "\r\n")
-
-    if param2 == "353":
-        param1.send(":" + ServerName + " 353 " + param3 + " = " + param4 + " :" + param5 + "\r\n")
-
-    if param2 == "364":
-        param1.send(":" + ServerName + " 364 " + param3 + " " + param4 + " " + NetworkName + " :0 " + param5 + "\r\n")
-
-    if param2 == "365":
-        param1.send(":" + ServerName + " 365 " + param3 + " * :End of /LINKS list.\r\n")
-
-    if param2 == "366":
-        param1.send(":" + ServerName + " 366 " + param3 + " " + param4 + " :End of /NAMES list.\r\n")
-
-    if param2 == "367":
-        param1.send(
-            ":" + ServerName + " 367 " + param3 + " " + param4 + " " + param5 + " " + param6 + " " + param7 + "\r\n")
-
-    if param2 == "368":
-        param1.send(":" + ServerName + " 368 " + param3 + " " + param4 + " :End of Channel Ban List\r\n")
-
-    if param2 == "371":
-        param1.send(":" + ServerName + " 371 " + param3 + " :" + param4 + " communication service 3.0.0\r\n:" +
-                    ServerName + " 371 " + param3 + statistics.server_launch + "\r\n")
-
-    if param2 == "372":
-        param1.send(":" + ServerName + " 372 " + param3 + " :- " + param4.replace("\r", "").replace("\n", "") + "\r\n")
-
-    if param2 == "374":
-        param1.send(":" + ServerName + " 374 " + param3 + " :End of /INFO list.\r\n")
-
-    if param2 == "375":
-        param1.send(":" + ServerName + " 375 " + param3 + " :- " + ServerName + " Message of the Day\r\n")
-
-    if param2 == "376":
-        param1.send(":" + ServerName + " 376 " + param3 + " :End of /MOTD command.\r\n")
-
-    if param2 == "378":
-        if param3.lower() in operator_entries:
-            xopid = 0
-            opid = operator_entries[param3.lower()]
-            if param4._nickname.lower() in operator_entries:
-                sopid = operator_entries[param4._nickname.lower()]
-                xopid = sopid.operator_level
-
-            if opid.operator_level >= xopid:
-                param1.send(
-                    ":" + ServerName + " 378 " + param3 + " " + param4._nickname + " :is connecting from " +
-                    param4.details
-                    [0] + "\r\n")
-
-    if param2 == "381":
-        param1.send(":" + ServerName + " 381 " + param3 + " :" + param4 + "\r\n")
-
-    if param2 == "391":
-        param1.send(":" + ServerName + " 381 " + param3 + " :%s\r\n" %
-                    (time.strftime("%A %B %d %H:%M:%S %Y GMT", time.localtime())))
-
-    if param2 == "401":
-        param1.send(":" + ServerName + " 401 " + param3 + " " + param4 + " :No such nick/channel\r\n")
-
-    if param2 == "403":
-        param1.send(":" + ServerName + " 403 " + param3 + " " + param4 + " :No such channel\r\n")
-
-    if param2 == "404":
-        param1.send(":" + ServerName + " 404 " + param3 + " " + param4 + " :" + param5 + "\r\n")
-
-    if param2 == "405":
-        param1.send(":" + ServerName + " 405 " + param3 + " " + param4 + " :You have joined too many channels\r\n")
-
-    if param2 == "409":
-        param1.send(":" + ServerName + " 409 " + param3 + " :No origin specified\r\n")
-
-    if param2 == "411":
-        param1.send(":" + ServerName + " 411 " + param3 + " :No recipient given (" + param4 + ")\r\n")
-
-    if param2 == "412":
-        param1.send(":" + ServerName + " 412 " + param3 + " :No text to send (" + param4 + ")\r\n")
-
-    if param2 == "416":
-        param1.send(":" + ServerName + " 416 " + param3 + " " + param4 +
-                    " :Too many lines in the output, restrict your request\r\n")
-
-    if param2 == "421":
-        param1.send(":" + ServerName + " 421 " + param3 + " " + param4 + " :Unknown Command\r\n")
-
-    if param2 == "422":
-        param1.send(":" + ServerName + " 422 " + param3 + " :MOTD File is missing\r\n")
-
-    if param2 == "432":
-        if param3 == "" or param3 == "*":
-            param3 = "*"
-            param1._nosendnickserv = True
-
-        param1.send(":" + ServerName + " 432 " + param3 + " " + param4 + " :Erroneous Nickname\r\n")
-
-    if param2 == "433":
-        if param3 == "" or param3 == "*":
-            param3 = "*"
-            param1._nosendnickserv = True
-
-        param1.send(":" + ServerName + " 433 " + param3 + " " + param4 + " :Nickname is already in use\r\n")
-
-    if param2 == "434":
-        if param3 == "":
-            param3 = "*"
-
-        param1.send(":" + ServerName + " 434 " + param3 + " " + param4 + " :Erroneous Username\r\n")
-
-    if param2 == "437":
-        param1.send(":" + ServerName + " 437 " + param3 + " " + param4 +
-                    " :Cannot change nickname while banned on channel\r\n")
-
-    if param2 == "438":
-        param1.send(
-            ":" + ServerName + " 438 " + param3 + " :Nick change too fast. Please try again in a few minutes.\r\n")
-
-    if param2 == "441":
-        param1.send(":" + ServerName + " 441 " + param3 + " " + param4 + " :They aren't on that channel\r\n")
-
-    if param2 == "442":
-        param1.send(":" + ServerName + " 442 " + param3 + " " + param4 + " :You're not in that channel\r\n")
-
-    if param2 == "443":
-        param1.send(":" + ServerName + " 443 " + param3 + " " + param4 + " " + param5 + " :is already on channel\r\n")
-
-    if param2 == "446":
-        param1.send(":" + ServerName + " 446 " + param3 + " :" + param4 + " has been disabled\r\n")
-
-    if param2 == "451":
-        param1.send(":" + ServerName + " 451 " + param3 + " :You have not registered\r\n")
-
-    if param2 == "461":
-        if param3 == "":
-            param3 = "*"
-        param1.send(":" + ServerName + " 461 " + param3 + " " + param4 + " :Not enough parameters\r\n")
-
-    if param2 == "462":
-        if param3 == "":
-            param3 = "*"
-        param1.send(":" + ServerName + " 462 " + param3 + " " + ":You may not reregister\r\n")
-
-    if param2 == "465":
-        param1.send(":" + ServerName + " 465 " + param3 + " " + ":You are banned from this server\r\n")
-        if param4 != "":
-            param1.send("ERROR :Closing Link: " + param1.details[0] + " (" + param4.strip() + ")\r\n")
-
-    if param2 == "468":
-        param1.send(":" + ServerName + " 468 " + param3 + " " + param4 + " :Only servers can change that mode\r\n")
-
-    if param2 == "471":
-        param1.send(":" + ServerName + " 471 " + param3 + " " + param4 + " :Cannot join channel (+l)\r\n")
-
-    if param2 == "472":
-        param1.send(":" + ServerName + " 472 " + param3 + " " + param4 + " :is unknown mode char to me\r\n")
-
-    if param2 == "473":
-        param1.send(":" + ServerName + " 473 " + param3 + " " + param4 + " :Cannot join channel (+i)\r\n")
-
-    if param2 == "475":
-        param1.send(":" + ServerName + " 475 " + param3 + " " + param4 + " :Cannot join channel (+k)\r\n")
-
-    if param2 == "477":
-        param1.send(":" + ServerName + " 477 " + param3 + " " + param4 +
-                    " :You need a registered nickname to join that channel\r\n")
-
-    if param2 == "481":
-        param1.send(":" + ServerName + " 481 " + param3 + " :" + param4 + "\r\n")
-
-    if param2 == "482":
-        param1.send(":" + ServerName + " 482 " + param3 + " " + param4 + " :You're not channel operator\r\n")
-
-    if param2 == "483":
-        param1.send(":" + ServerName + " 483 " + param3 + " " + param4 + " :Cannot join channel (" + param5 + ")\r\n")
-
-    if param2 == "485":
-        param1.send(":" + ServerName + " 485 " + param3 + " " + param4 + " :You're not channel owner\r\n")
-
-    if param2 == "491":
-        param1.send(":" + ServerName + " 491 " + param3 + " :" + param4 + "\r\n")
-
-    if param2 == "501":
-        param1.send(":" + ServerName + " 501 " + param3 + " :Unknown MODE flag\r\n")
-
-    if param2 == "502":
-        param1.send(":" + ServerName + " 502 " + param3 + " :Can't change mode for other users\r\n")
-
-    if param2 == "520":
-        param1.send(":" + ServerName + " 520 " + param3 + " " + param4 + " :Authenticated clients only\r\n")
-
-    if param2 == "613":  # :TK2CHATWBC05 613 null :207.68.167.157 6667
-        param1.send(":" + ServerName + " 613 " + param3 + " :" + param4 + " +" + param5 + "\r\n")
-
-    if param2 == "702":
-        param1.send(":" + ServerName + " 702 " + param3 + " " + param4 + " :Channel not found\r\n")
-
-    if param2 == "705":
-        param1.send(":" + ServerName + " 705 " + param3 + " " + param4 + " :Channel with same name exists\r\n")
-
-    if param2 == "710":
-        param1.send(
-            ":" + ServerName + " 710 " + param3 + " :The server Administrator has limited this server to " + MaxChannels +
-            " channels\r\n")
-
-    if param2 == "800":
-        param1.send(":" + ServerName + " 800 " + param3 + " " + param4 + " 0 ANON 512 *\r\n")
-
-    if param2 == "801":
-        param1.send(":%s 801 %s %s\r\n" % (ServerName, param3, param4))
-
-    if param2 == "802":
-        param1.send(":%s 802 %s %s\r\n" % (ServerName, param3, param4))
-
-    if param2 == "803":
-        param1.send(":%s 803 %s %s :Start of access entries\r\n" % (ServerName, param3, param4))
-
-    if param2 == "804":
-        param1.send(":%s 804 %s %s\r\n" % (ServerName, param3, param4))
-
-    if param2 == "805":
-        param1.send(":%s 805 %s %s :End of access entries\r\n" % (ServerName, param3, param4))
-
-    if param2 == "818":
-        param1.send(":" + ServerName + " 818 " + param3 + " " + param4 + "\r\n")
-
-    if param2 == "819":
-        param1.send(":" + ServerName + " 819 " + param3 + " " + param4 + " :End of properties\r\n")
-
-    if param2 == "820":
-        param1.send(":%s 820 %s %s %s :Clear\r\n" % (ServerName, param3, param4, param5))
-
-    # if param2 == "821":
-    # param1.send(":%s 821 :User unaway\r\n" % (param3._nickname))
-
-    # if param2 == "822":
-    # param1.send(":%s 822 :%s\r\n" % (param3._nickname,param3._away))
-
-    if param2 == "900":
-        param1.send(":%s 900 %s %s :Bad command\r\n" % (ServerName, param3, param4))
-
-    if param2 == "903":
-        param1.send(":%s 903 %s %s :Bad level\r\n" % (ServerName, param3, param4))
-
-    if param2 == "905":
-        param1.send(":%s 905 %s %s :Bad property specified\r\n" % (ServerName, param3, param4))
-
-    if param2 == "906":
-        param1.send(":%s 906 %s %s :Bad value specified\r\n" % (ServerName, param3, param4))
-
-    if param2 == "908":
-        param1.send(":%s 908 %s :No permissions to perform command\r\n" % (ServerName, param3))
-
-    if param2 == "909":
-        param1.send(":%s 909 %s :No such nickname registered to services\r\n" % (ServerName, param3))
-
-    if param2 == "912":
-        param1.send(":%s 912 %s %s :Unsupported authentication package\r\n" % (ServerName, param3, param4))
-
-    if param2 == "913":
-        param1.send(":%s 913 %s %s :No access\r\n" % (ServerName, param3, param4))
-
-    if param2 == "914":
-        param1.send(":%s 914 %s %s :Duplicate access entry\r\n" % (ServerName, param3, param4))
-
-    if param2 == "915":
-        param1.send(":%s 915 %s %s :Unknown access entry\r\n" % (ServerName, param3, param4))
-
-    if param2 == "916":
-        param1.send(":%s 916 %s %s :Too many access entries\r\n" % (ServerName, param3, param4))
-
-    if param2 == "922":
-        param1.send(":%s 922 %s %s :Some entries not cleared due to security\r\n" % (ServerName, param3, param4))
-
-    if param2 == "923":
-        param1.send(":%s 923 %s %s :Does not permit whispers\r\n" % (ServerName, param3, param4))
-
-    if param2 == "924":
-        param1.send(":%s 924 %s %s :No such object found\r\n" % (ServerName, param3, param4))
-
-    if param2 == "925":
-        param1.send(":%s 925 %s %s :Command not supported.\r\n" % (ServerName, param3, param4))
-
-    if param2 == "927":
-        param1.send(":%s 927 %s %s :Already in the channel.\r\n" % (ServerName, param3, param4))
-
-    if param2 == "934":
-        param1.send(":%s 934 %s %s :The channel you were on has been closed\r\n" % (ServerName, param3, param4))
-
-    if param2 == "935":
-        param1.send(":%s 935 %s %s :Too many wildcards\r\n" % (ServerName, param3, param4))
-
-    if param2 == "997":
-        param1.send(":%s 997 %s %s %s :Not supported by object\r\n" % (ServerName, param3, param4, param5))
-
-    if param2 == "998":
-        param1.send(":%s 998 %s %s %s :Cannot invite to channel\r\n" % (ServerName, param3, param4, param5))
-
-    if param2 == "955":
-        param1.send(
-            ":%s 955 %s :\x02Credits - pyRCX networking chat service 3.0.0\x02\r\n:%s 955 %s :Christopher Webb\r\n" %
-            (ServerName, param3, ServerName, param3))
-        param1.send(":%s 955 %s :-\r\n" % (ServerName, param3))
-        param1.send(
-            ":%s 955 %s :\x02With thanks to:\x02\r\n:%s 955 %s :Darren Davies, Rob Lancaster, Kevin Deveau, Aaron Caffrey, Shane Britt\r\n" % (
-                ServerName, param3, ServerName, param3))
-        param1.send(":%s 955 %s :-\r\n" % (ServerName, param3))
-        param1.send(
-            ":%s 955 %s :\x02In loving memory of:\x02\r\n:%s 955 %s :Danny Moon, Ricky Laurn\r\n" %
-            (ServerName, param3, ServerName, param3))
-        param1.send(":%s 955 %s :-\r\n" % (ServerName, param3))
-        param1.send(
-            ":%s 955 %s :\x02Be kind to one another, love like it's your last day on this amazing planet.\r\n" %
-            (ServerName, param3))
-
 
 def myint(strdata):
     try:
@@ -1718,7 +1176,7 @@ def Whouser(_whouser, chan, selfn):
             return ""
 
     whostring = "%s %s %s %s %s %s%s%s :0 %s" % (
-        _whochan, _whouser._username, _whouser._hostmask, ServerName, _whouser._nickname, _whoaway, _isoper, _whomode,
+        _whochan, _whouser._username, _whouser._hostmask, server_name, _whouser._nickname, _whoaway, _isoper, _whomode,
         _whouser._fullname)
 
     return whostring
@@ -1820,7 +1278,7 @@ class Prop:
         if _self._nickname.lower() in chanid._users:
             if _self._nickname.lower() in chanid._op or _self._nickname.lower() in chanid._owner:
                 if sData.__len__() > 256:
-                    raw(_self, "905", _self._nickname, chanid.channelname)
+                    raw_messages.raw(_self, "905", _self._nickname, chanid.channelname)
                 else:
                     stroj = sData
                     if stroj[0] != ":":
@@ -1828,22 +1286,26 @@ class Prop:
                     else:
                         stroj = stroj[1:]
 
-                    chanid._prop.onjoin = stroj
+                    if onmsg.upper() == "ONJOIN":
+                        chanid._prop.onjoin = stroj
+                    elif onmsg.upper() == "ONPART":
+                        chanid._prop.onpart = stroj
+
                     for each in chanid._users:
                         cid = nickname_to_client_mapping_entries[each]
                         cid.send(
                             ":%s!%s@%s PROP %s %s :%s\r\n" %
                             (_self._nickname, _self._username, _self._hostmask, chanid.channelname, onmsg, stroj))
             else:
-                raw(_self, "482", _self._nickname, chanid.channelname)
+                raw_messages.raw(_self, "482", _self._nickname, chanid.channelname)
         else:
-            raw(_self, "442", _self._nickname, chanid.channelname)
+            raw_messages.raw(_self, "442", _self._nickname, chanid.channelname)
 
     def _client(self, chanid, _self, sData):
         if _self._nickname.lower() in chanid._users:
             if _self._nickname.lower() in chanid._op or _self._nickname.lower() in chanid._owner:
                 if sData.__len__() > 32:
-                    raw(_self, "905", _self._nickname, chanid.channelname)
+                    raw_messages.raw(_self, "905", _self._nickname, chanid.channelname)
                 else:
                     if sData == ":":
                         sData = ""
@@ -1857,13 +1319,13 @@ class Prop:
                             ":%s!%s@%s PROP %s CLIENT :%s\r\n" %
                             (_self._nickname, _self._username, _self._hostmask, chanid.channelname, sData))
             else:
-                raw(_self, "482", _self._nickname, chanid.channelname)
+                raw_messages.raw(_self, "482", _self._nickname, chanid.channelname)
         else:
-            raw(_self, "442", _self._nickname, chanid.channelname)
+            raw_messages.raw(_self, "442", _self._nickname, chanid.channelname)
 
     def _topic(self, chanid, _self, sData, strd):
         if strd.__len__() > 512:
-            raw(_self, "905", _self._nickname, chanid.channelname)
+            raw_messages.raw(_self, "905", _self._nickname, chanid.channelname)
         else:
             dotopic = False
 
@@ -1872,7 +1334,7 @@ class Prop:
 
             if dotopic:
                 if chanid.MODE_ownertopic and _self._nickname.lower() not in chanid._owner:
-                    raw(_self, "485", self._nickname, chanid.channelname)
+                    raw_messages.raw(_self, "485", self._nickname, chanid.channelname)
                 else:
                     chanid._topic = sData
                     if chanid._topic[0] == ":":
@@ -1889,13 +1351,13 @@ class Prop:
                             ":%s!%s@%s TOPIC %s :%s\r\n" %
                             (_self._nickname, _self._username, _self._hostmask, chanid.channelname, chanid._topic))
             else:
-                raw(_self, "482", _self._nickname, chanid.channelname)
+                raw_messages.raw(_self, "482", _self._nickname, chanid.channelname)
 
     def _subject(self, chanid, _self, sData):
         if _self._nickname.lower() in chanid._users:
             if _self._nickname.lower() in chanid._op or _self._nickname.lower() in chanid._owner:
                 if sData.__len__() > 32:
-                    raw(_self, "905", _self._nickname, chanid.channelname)
+                    raw_messages.raw(_self, "905", _self._nickname, chanid.channelname)
                 else:
                     if sData == ":":
                         sData = ""
@@ -1908,15 +1370,15 @@ class Prop:
                             ":%s!%s@%s PROP %s SUBJECT :%s\r\n" %
                             (_self._nickname, _self._username, _self._hostmask, chanid.channelname, sData))
             else:
-                raw(_self, "482", _self._nickname, chanid.channelname)
+                raw_messages.raw(_self, "482", _self._nickname, chanid.channelname)
         else:
-            raw(_self, "442", _self._nickname, chanid.channelname)
+            raw_messages.raw(_self, "442", _self._nickname, chanid.channelname)
 
     def _lag(self, chanid, _self, sData):
         if _self._nickname.lower() in chanid._users:
             if _self._nickname.lower() in chanid._op or _self._nickname.lower() in chanid._owner:
                 if myint(sData) >= 5 or myint(sData) < -1 or myint(sData) == 0 and sData != "0":
-                    raw(_self, "905", _self._nickname, chanid.channelname)
+                    raw_messages.raw(_self, "905", _self._nickname, chanid.channelname)
                 else:
                     if myint(sData) == 0:
                         sData = 0
@@ -1927,15 +1389,15 @@ class Prop:
                                                                     _self._hostmask, chanid.channelname,
                                                                     str(myint(sData))))
             else:
-                raw(_self, "482", _self._nickname, chanid.channelname)
+                raw_messages.raw(_self, "482", _self._nickname, chanid.channelname)
         else:
-            raw(_self, "442", _self._nickname, chanid.channelname)
+            raw_messages.raw(_self, "442", _self._nickname, chanid.channelname)
 
     def _language(self, chanid, _self, sData):
         if _self._nickname.lower() in chanid._users:
             if _self._nickname.lower() in chanid._op or _self._nickname.lower() in chanid._owner:
                 if myint(sData) >= 65535 or myint(sData) < -1 or myint(sData) == 0 and sData != "0" and sData != ":":
-                    raw(_self, "905", _self._nickname, chanid.channelname)
+                    raw_messages.raw(_self, "905", _self._nickname, chanid.channelname)
                 else:
                     if sData == ":":
                         chanid._prop.language = ""
@@ -1948,9 +1410,9 @@ class Prop:
                                                                          _self._hostmask, chanid.channelname,
                                                                          str(chanid._prop.language)))
             else:
-                raw(_self, "482", _self._nickname, chanid.channelname)
+                raw_messages.raw(_self, "482", _self._nickname, chanid.channelname)
         else:
-            raw(_self, "442", _self._nickname, chanid.channelname)
+            raw_messages.raw(_self, "442", _self._nickname, chanid.channelname)
 
     def _name(self, chanid, _self, sData):
         if _self._nickname.lower() in operator_entries:
@@ -1967,17 +1429,17 @@ class Prop:
 
                     chanid.channelname = sData
                 else:
-                    raw(_self, "908", _self._nickname)
+                    raw_messages.raw(_self, "908", _self._nickname)
             else:
-                raw(_self, "908", _self._nickname)
+                raw_messages.raw(_self, "908", _self._nickname)
         else:
-            raw(_self, "908", _self._nickname)
+            raw_messages.raw(_self, "908", _self._nickname)
 
     def _hostkey(self, chanid, _self, sData):
         if _self._nickname.lower() in chanid._users:
             if _self._nickname.lower() in chanid._owner:
                 if chanid._prop.validate(sData) == False:
-                    raw(_self, "905", _self._nickname, chanid.channelname)
+                    raw_messages.raw(_self, "905", _self._nickname, chanid.channelname)
                 else:
                     if sData == ":":
                         sData = ""
@@ -1992,9 +1454,9 @@ class Prop:
                                 ":%s!%s@%s PROP %s HOSTKEY :%s\r\n" %
                                 (_self._nickname, _self._username, _self._hostmask, chanid.channelname, sData))
             else:
-                raw(_self, "485", _self._nickname, chanid.channelname)
+                raw_messages.raw(_self, "485", _self._nickname, chanid.channelname)
         else:
-            raw(_self, "442", _self._nickname, chanid.channelname)
+            raw_messages.raw(_self, "442", _self._nickname, chanid.channelname)
 
     def _memberkey(self, chanid, _self, sData):
         if _self._nickname.lower() in chanid._op or _self._nickname.lower() in chanid._owner:
@@ -2016,16 +1478,16 @@ class Prop:
                             ":%s!%s@%s MODE %s +k %s\r\n" %
                             (_self._nickname, _self._username, _self._hostmask, chanid.channelname, sData))
             else:
-                raw(self, "905", _self._nickname, chanid.channelname)
+                raw_messages.raw(self, "905", _self._nickname, chanid.channelname)
         else:
-            raw(self, "482", _self._nickname, chanid.channelname)
+            raw_messages.raw(self, "482", _self._nickname, chanid.channelname)
 
     def _ownerkey(self, chanid, _self, sData):
 
         if _self._nickname.lower() in chanid._users:
             if _self._nickname.lower() in chanid._owner:
                 if chanid._prop.validate(sData) == False:
-                    raw(_self, "905", _self._nickname, chanid.channelname)
+                    raw_messages.raw(_self, "905", _self._nickname, chanid.channelname)
                 else:
                     if sData == ":":
                         sData = ""
@@ -2045,9 +1507,9 @@ class Prop:
                     time.sleep(0.2)  # let people have fun!
 
             else:
-                raw(_self, "485", _self._nickname, chanid.channelname)
+                raw_messages.raw(_self, "485", _self._nickname, chanid.channelname)
         else:
-            raw(_self, "442", _self._nickname, chanid.channelname)
+            raw_messages.raw(_self, "442", _self._nickname, chanid.channelname)
 
     def _reset(self, chanid, _self, sData):
 
@@ -2059,7 +1521,7 @@ class Prop:
             elif r <= 120 and r > -1:
                 chanid._prop.reset = r
             else:
-                raw(_self, "906", _self._nickname, sData)
+                raw_messages.raw(_self, "906", _self._nickname, sData)
                 b = False
 
             if b:
@@ -2069,7 +1531,7 @@ class Prop:
                                                                   _self._hostmask, chanid.channelname,
                                                                   chanid._prop.reset))
         else:
-            raw(_self, "485", _self._nickname, chanid.channelname)
+            raw_messages.raw(_self, "485", _self._nickname, chanid.channelname)
 
 
 def CheckServerAccess(nickid=False):
@@ -2275,11 +1737,11 @@ class Access:
                         ServerAccess.remove(each)
 
             if _securitymsg:
-                raw(cid, "922", cid._nickname, "*")
+                raw_messages.raw(cid, "922", cid._nickname, "*")
             else:
                 if level == "":
                     level = "*"
-                raw(cid, "820", cid._nickname, "*", level)
+                raw_messages.raw(cid, "820", cid._nickname, "*", level)
 
         elif object[0] == "#" or object[0] == "%" or object[0] == "&":
             chanid = channel_entries[object.lower()]
@@ -2293,7 +1755,7 @@ class Access:
                 _operlevel = opid.operator_level + 2
 
             if _operlevel < 1:
-                raw(cid, "913", cid._nickname, chanid.channelname)
+                raw_messages.raw(cid, "913", cid._nickname, chanid.channelname)
                 return -1
 
             for each in list(chanid.ChannelAccess):
@@ -2304,11 +1766,11 @@ class Access:
                         chanid.ChannelAccess.remove(each)
 
             if _securitymsg:
-                raw(cid, "922", cid._nickname, chanid.channelname)
+                raw_messages.raw(cid, "922", cid._nickname, chanid.channelname)
             else:
                 if level == "":
                     level = "*"
-                raw(cid, "820", cid._nickname, chanid.channelname, level)
+                raw_messages.raw(cid, "820", cid._nickname, chanid.channelname, level)
 
         else:
             for each in list(cid._access):
@@ -2317,7 +1779,7 @@ class Access:
 
             if level == "":
                 level = "*"
-            raw(cid, "820", cid._nickname, cid._nickname, level)
+            raw_messages.raw(cid, "820", cid._nickname, cid._nickname, level)
 
     def DelRecord(self, cid, object, level, mask):
         if object[0] == "*":
@@ -2409,7 +1871,7 @@ class Access:
 
         entry = None
         if cid == "":
-            setby = ServerName
+            setby = server_name
         else:
             setby = cid._username + "@" + cid._hostmask
 
@@ -2544,7 +2006,7 @@ class Channel(ChannelBaseClass):
         if joinuser.lower() in operator_entries:
             operator_level = operator_entries[joinuser.lower()].operator_level
 
-        return p.match(channelname) == None or not filtering.filter(channelname, "chan", operator_level)
+        return p.match(channelname) is not None and not filtering.filter(channelname, "chan", operator_level)
 
     def __init__(self, channelname, joinuser, creationmodes=""):
         ChannelBaseClass.__init__(self)
@@ -2552,7 +2014,7 @@ class Channel(ChannelBaseClass):
         if joinuser != "" and self.__validate(channelname, joinuser) == False:
             if joinuser != "":
                 cclientid = nickname_to_client_mapping_entries[joinuser.lower()]
-                cclientid.send(":%s 706 %s :Channel name is not valid\r\n" % (ServerName, cclientid._nickname))
+                cclientid.send(":%s 706 %s :Channel name is not valid\r\n" % (server_name, cclientid._nickname))
 
             delGlobalChannel(self.channelname.lower())
 
@@ -2578,7 +2040,7 @@ class Channel(ChannelBaseClass):
             if joinuser != "":
                 self._prop = Prop(channelname, cclientid)  # create instance of prop class
             else:
-                self._prop = Prop(channelname, ServerName)
+                self._prop = Prop(channelname, server_name)
 
             if self.channelname[0] == "&":
                 self.localChannel = True
@@ -2638,7 +2100,7 @@ def sendWatchOpers(details):
         opid = operator_entries[each.lower()]
         if opid.watchserver:
             scid = nickname_to_client_mapping_entries[each.lower()]
-            scid.send(":%s NOTICE %s :*** %s" % (ServerName, scid._nickname, details))
+            scid.send(":%s NOTICE %s :*** %s" % (server_name, scid._nickname, details))
 
 
 def sendNickservOpers(details):
@@ -2646,7 +2108,7 @@ def sendNickservOpers(details):
         opid = operator_entries[each.lower()]
         if opid.watchnickserv:
             scid = nickname_to_client_mapping_entries[each.lower()]
-            scid.send(":%s NOTICE %s :*** %s" % (ServerName, scid._nickname, details))
+            scid.send(":%s NOTICE %s :*** %s" % (server_name, scid._nickname, details))
 
 
 def sendAdminOpers(details):
@@ -2661,9 +2123,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
     def __init__(self, client, details, port):
 
-        ClientBaseClass.__init__(self, ServerName)
+        ClientBaseClass.__init__(self, server_name)
 
-        self._server = ServerName
+        self._server = server_name
         self.die = False
         self.client = client
         self.details = details
@@ -2676,7 +2138,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
         self._pingr = int(GetEpochTime() + 30)
         self._rping = 1
         self._ptries = 0
-        self._server = ServerName
+        self._server = server_name
         self._signontime = int(GetEpochTime())
         self._welcome = False
         self._idletime = int(GetEpochTime())
@@ -2702,7 +2164,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
             if str([each[2][0]]) == str(extract_tb(tuError[2])):
                 self.send(
                     ":%s NOTICE LINK :*** Bug found and has already been reported, if this becomes a problem, please alert an administrator\r\n" % (
-                        ServerName))
+                        server_name))
                 return
 
         _lastError.append(
@@ -2712,7 +2174,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
              extract_tb(tuError[2])])
         self.send(
             ":%s NOTICE LINK :*** Bug found, please report the following:\r\n:%s NOTICE LINK :*** %s\r\n:%s NOTICE LINK :*** %s\r\n:%s NOTICE LINK *** End of bug report\r\n" %
-            (ServerName, ServerName, str(tuError[0]), ServerName, str(tuError[1]), ServerName))
+            (server_name, server_name, str(tuError[0]), server_name, str(tuError[1]), server_name))
 
     def selfaccess(self, cclientid):
         _Access.CheckSelfExpiry(cclientid)
@@ -2745,29 +2207,29 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
             return True
 
     def _sendlusers(self):
-        raw(self, "251", self._nickname)
-        raw(self, "252", self._nickname)
-        raw(self, "253", self._nickname)
-        raw(self, "254", self._nickname)
-        raw(self, "255", self._nickname)
-        raw(self, "265", self._nickname)
-        raw(self, "266", self._nickname)
+        raw_messages.raw(self, "251", self._nickname)
+        raw_messages.raw(self, "252", self._nickname)
+        raw_messages.raw(self, "253", self._nickname)
+        raw_messages.raw(self, "254", self._nickname)
+        raw_messages.raw(self, "255", self._nickname)
+        raw_messages.raw(self, "265", self._nickname)
+        raw_messages.raw(self, "266", self._nickname)
 
     def _sendmotd(self, filename):
 
         try:
             myfile = open(filename, 'r')
         except:
-            raw(self, "422", self._nickname)
+            raw_messages.raw(self, "422", self._nickname)
             return False
 
-        raw(self, "375", self._nickname)
+        raw_messages.raw(self, "375", self._nickname)
 
         for lineStr in myfile.readlines():
-            raw(self, "372", self._nickname, lineStr)
+            raw_messages.raw(self, "372", self._nickname, lineStr)
             lineStr = myfile.readline()
 
-        raw(self, "376", self._nickname)
+        raw_messages.raw(self, "376", self._nickname)
 
         myfile.close()
 
@@ -2790,7 +2252,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                     if grantfound:
                         break
 
-                    raw(self, "465", self._nickname, each._reason[1:])
+                    raw_messages.raw(self, "465", self._nickname, each._reason[1:])
                     self.die = True
                     self.quittype = 9
                     self.close()
@@ -2802,11 +2264,11 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
         unknown_connection_entries.remove(self)
 
-        raw(self, "001", self._nickname, NetworkName)
-        raw(self, "002", self._nickname, ServerName)
-        raw(self, "003", self._nickname)
-        raw(self, "004", self._nickname, NetworkName)
-        raw(self, "005", self._nickname)
+        raw_messages.raw(self, "001", self._nickname, NetworkName)
+        raw_messages.raw(self, "002", self._nickname, server_name)
+        raw_messages.raw(self, "003", self._nickname)
+        raw_messages.raw(self, "004", self._nickname, NetworkName)
+        raw_messages.raw(self, "005", self._nickname, NetworkName)
         self._sendlusers()
         self._sendmotd("./pyRCX/conf/motd.conf")
 
@@ -2869,33 +2331,33 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                 return -1
 
             if operlevel == 0:
-                raw(self, "481", self._nickname, "Permission Denied - You're not a System Operator")
+                raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System Operator")
                 return -2
 
             if val == 1:
                 if operlevel < 1:
-                    raw(self, "481", self._nickname, "Permission Denied - You're not a System Operator")
+                    raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System Operator")
                     return -2
                 else:
                     return 1
 
             if val == 2:
                 if operlevel < 2:
-                    raw(self, "481", self._nickname, "Permission Denied - You're not a System Chat Manager")
+                    raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System Chat Manager")
                     return -2
                 else:
                     return 1
 
             if val == 3:
                 if operlevel < 3:
-                    raw(self, "481", self._nickname, "Permission Denied - You're not a Server Administrator")
+                    raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a Server Administrator")
                     return -2
                 else:
                     return 1
 
             if val == 4:
                 if operlevel < 3:
-                    raw(self, "481", self._nickname, "Permission Denied - You're not the Network Administrator")
+                    raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not the Network Administrator")
                     return -2
                 else:
                     return 1
@@ -2910,7 +2372,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
         if str(len(connections) - 1) == str(MaxUsers):
             print("*** Connection closed '", self.details[0], "', server is full")
-            self.send(":" + ServerName + " NOTICE AUTH :*** Sorry, this server is full, you can try reconnecting\r\n")
+            self.send(":" + server_name + " NOTICE AUTH :*** Sorry, this server is full, you can try reconnecting\r\n")
             self.send("ERROR :Closing Link: %s (Server is full)\r\n" % (self.details[0]))
             self.close()
             connections.remove(self)
@@ -2946,7 +2408,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                 print("*** Connection closed '", self.details[0], "', too many connections")
 
                 self.send(
-                    ":" + ServerName + " NOTICE AUTH :*** Sorry, your client is restricted to %d clones\r\n" %
+                    ":" + server_name + " NOTICE AUTH :*** Sorry, your client is restricted to %d clones\r\n" %
                     (MaxUsersPerConnection))
 
                 self.send("ERROR :Closing Link: %s (Too many connections)\r\n" % (self.details[0]))
@@ -2954,18 +2416,18 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                 self.quittype = 10
             else:
                 if str(HostMasking) == "2":
-                    self.send(":" + ServerName + " NOTICE AUTH :*** Looking up your hostname...\r\n")
+                    self.send(":" + server_name + " NOTICE AUTH :*** Looking up your hostname...\r\n")
 
                     try:
                         self._hostname = socket.gethostbyaddr(self.details[0])[0]
                         if socket.gethostbyname(self._hostname) == self.details[0]:
-                            self.send(":" + ServerName + " NOTICE AUTH :*** Found your hostname\r\n")
+                            self.send(":" + server_name + " NOTICE AUTH :*** Found your hostname\r\n")
                         else:
                             someerror
                     except:
                         self._hostname = self.details[0]
                         self.send(
-                            ":" + ServerName +
+                            ":" + server_name +
                             " NOTICE AUTH :*** Could not find your hostname, using your IP instead\r\n")
 
                 if str(HostMasking) == "0":
@@ -3004,9 +2466,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                     self._hostmask = self.details[0]
 
                 if ServerPassword != "":
-                    self.send(":" + ServerName + " NOTICE AUTH :*** " + passmsg + "\r\n")
+                    self.send(":" + server_name + " NOTICE AUTH :*** " + passmsg + "\r\n")
 
-                self.send("PING :" + ServerName + "\r\n")
+                self.send("PING :" + server_name + "\r\n")
                 self.client.setblocking(0)
 
                 while True:
@@ -3017,7 +2479,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                     while True:
                         if int(GetEpochTime()) >= self._pingr:
                             if self._rping != 0 and self._welcome:
-                                self.send("PING :" + ServerName + "\r\n")
+                                self.send("PING :" + server_name + "\r\n")
                                 self._rping -= 1
                                 self._pingr = (int(GetEpochTime()) + 10)
                             else:
@@ -3067,7 +2529,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                     if len(strdata) >= 480:
                         strdata = ""
-                        raw(self, "263", self._nickname)
+                        raw_messages.raw(self, "263", self._nickname)
 
                     try:
                         if strdata == "":
@@ -3129,13 +2591,13 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                         elif _disabled < 1:
                             if _disabled == -1:
-                                raw(self, "446", self._nickname, param[0])
+                                raw_messages.raw(self, "446", self._nickname, param[0])
 
                         elif param[0] == "AUTH":
                             try:
-                                raw(self, "912", self._nickname, param[1])
+                                raw_messages.raw(self, "912", self._nickname, param[1])
                             except:
-                                raw(self, "461", self._nickname, param[0])
+                                raw_messages.raw(self, "461", self._nickname, param[0])
 
                         elif param[0] == "NICK":
                             Nick_function(self, param)
@@ -3143,26 +2605,26 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                         elif param[0] == "PASS":  # PASS password
                             if ServerPassword != "":
                                 if self._password:
-                                    raw(self, "462", self._nickname)
+                                    raw_messages.raw(self, "462", self._nickname)
                                 else:
                                     if param[1] == ServerPassword:
                                         self._password = True
-                                        self.send(":" + ServerName + " NOTICE AUTH :*** Password accepted\r\n")
+                                        self.send(":" + server_name + " NOTICE AUTH :*** Password accepted\r\n")
                                         if self._logoncheck():
                                             self._sendwelcome()
                                     else:
-                                        self.send(":" + ServerName + " NOTICE AUTH :*** Invalid password\r\n")
+                                        self.send(":" + server_name + " NOTICE AUTH :*** Invalid password\r\n")
                                         self._ptries += 1
                                         if self._ptries == 3:
                                             if self._nickname != "":
-                                                self.send(":" + ServerName + " KILL " + self._nickname +
+                                                self.send(":" + server_name + " KILL " + self._nickname +
                                                           " :Too many invalid passwords\r\n")
                                             else:
-                                                self.send(":" + ServerName +
+                                                self.send(":" + server_name +
                                                           " NOTICE AUTH :*** Too many invalid passwords\r\n")
                                             break
                             else:
-                                self.send(":" + ServerName + " NOTICE AUTH :*** PASS has been disabled\r\n")
+                                self.send(":" + server_name + " NOTICE AUTH :*** PASS has been disabled\r\n")
 
                         elif param[0] == "PONG":
                             if self._rping < 2 and self._welcome:
@@ -3170,7 +2632,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                         elif param[0] == "USER":  # USER ident mode[8] unused :fullname
                             if self._username != "":
-                                raw(self, "462", self._nickname)
+                                raw_messages.raw(self, "462", self._nickname)
                             else:
                                 ustr = self._validate(param[1].replace(".", ""))
                                 if ustr == False:
@@ -3195,9 +2657,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         if self._logoncheck():
                                             self._sendwelcome()
                                     else:
-                                        raw(self, "434", self._nickname, param[1].replace(':', ''))
+                                        raw_messages.raw(self, "434", self._nickname, param[1].replace(':', ''))
                                 else:
-                                    raw(self, "434", self._nickname, param[1].replace(':', ''))
+                                    raw_messages.raw(self, "434", self._nickname, param[1].replace(':', ''))
 
                         elif param[0] == "QUIT":  # QUIT :die reasons
                             try:
@@ -3226,16 +2688,16 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                 ret = param[1]
                                 if ret[0] == ":":
                                     ret = strdata.split(" ", 1)[1][1:]
-                                self.send(":%s PONG %s :%s\r\n" % (ServerName, ServerName, ret))
+                                self.send(":%s PONG %s :%s\r\n" % (server_name, server_name, ret))
                             except:
-                                raw(self, "409", self._nickname)
+                                raw_messages.raw(self, "409", self._nickname)
 
                         elif param[0] == "IRCX":
-                            raw(self, "800", self._nickname, "1")
+                            raw_messages.raw(self, "800", self._nickname, "1")
                             self._IRCX = True
 
                         elif param[0] == "ISIRCX":
-                            raw(self, "800", self._nickname, "0")
+                            raw_messages.raw(self, "800", self._nickname, "0")
 
                         else:
                             if self._welcome:
@@ -3260,7 +2722,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                     if len(param) == 2:
                                         if param[1] == AdminPassword:
                                             Noop = False
-                                            self.send(":" + ServerName + " NOTICE SERVER :*** Oper is now enabled\r\n")
+                                            self.send(":" + server_name + " NOTICE SERVER :*** Oper is now enabled\r\n")
                                     else:
                                         if opid:
                                             if opid.operator_level >= 3:
@@ -3275,32 +2737,32 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                 temp_noopers.append(cid)
                                                                 cid.send(
                                                                     ":%s MODE %s -%s\r\n" %
-                                                                    (ServerName, cid._nickname, opid2.flags))
+                                                                    (server_name, cid._nickname, opid2.flags))
                                                                 cid.send(
-                                                                    ":" + ServerName +
+                                                                    ":" + server_name +
                                                                     " NOTICE SERVER :*** Your o-line has been disabled temporarily\r\n")
                                                                 del operator_entries[each]
 
                                                     self.send(
-                                                        ":" + ServerName +
+                                                        ":" + server_name +
                                                         " NOTICE SERVER :*** All opers have been disabled\r\n")
 
                                                 else:
                                                     Noop = False
-                                                    self.send(":" + ServerName +
+                                                    self.send(":" + server_name +
                                                               " NOTICE SERVER :*** Oper is now enabled\r\n")
                                                     for each in temp_noopers:
                                                         each.send(
-                                                            ":" + ServerName +
+                                                            ":" + server_name +
                                                             " NOTICE SERVER :*** Your o-line has been enabled, please re-oper\r\n")
 
                                                     temp_noopers = []
 
                                             else:
-                                                raw(self, "481", self._nickname,
+                                                raw_messages.raw(self, "481", self._nickname,
                                                     "Permission Denied - You're not the Network Administrator")
                                         else:
-                                            raw(self, "481", self._nickname,
+                                            raw_messages.raw(self, "481", self._nickname,
                                                 "Permission Denied - You're not a System Operator")
 
                                 elif param[0] == "WATCH":
@@ -3308,13 +2770,13 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         if chanid:
                                             self._watch.append(chanid.channelname)
                                             chanid.join(self._nickname)
-                                            self.send(":" + ServerName + " NOTICE WATCH :*** You are now watching " +
+                                            self.send(":" + server_name + " NOTICE WATCH :*** You are now watching " +
                                                       chanid.channelname +
                                                       ", to join the conversation, part and re-join\r\n")
                                         else:
-                                            raw(self, "403", self._nickname, param[1])
+                                            raw_messages.raw(self, "403", self._nickname, param[1])
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "KILL":
@@ -3328,7 +2790,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 copid = operator_entries[cid._nickname.lower()]
                                                 if copid.operator_level > opid.operator_level and param[
                                                     1].lower() != self._nickname.lower():
-                                                    raw(self, "481", self._nickname,
+                                                    raw_messages.raw(self, "481", self._nickname,
                                                         "Permission Denied - You do not have the correct privileges to kill this oper")
                                                 else:
                                                     cid.quittype = -1
@@ -3354,7 +2816,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         elif chanid:
                                             if opid.operator_level > 1:
                                                 if chanid.MODE_registered or chanid.MODE_servicechan:
-                                                    raw(self, "481", self._nickname,
+                                                    raw_messages.raw(self, "481", self._nickname,
                                                         "Permission Denied - You cannot kill a registered channel")
                                                 else:
                                                     if self._IRCX:
@@ -3363,26 +2825,26 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                    chanid.channelname, msg))
                                                     else:
                                                         self.send(
-                                                            ":" + ServerName + " NOTICE SERVER :*** Killed channel " +
+                                                            ":" + server_name + " NOTICE SERVER :*** Killed channel " +
                                                             chanid.channelname + " (" + strdata.split(" ", 2)[2] +
                                                             ")\r\n")
 
                                                     for each in chanid._users:
                                                         cid = nickname_to_client_mapping_entries[each]
                                                         cid._channels.remove(chanid.channelname)
-                                                        raw(cid, "934", cid._nickname, chanid.channelname)
+                                                        raw_messages.raw(cid, "934", cid._nickname, chanid.channelname)
 
                                                     chanid._users = {}
                                                     chanid.resetchannel(True)
                                             else:
-                                                raw(self, "481", self._nickname,
+                                                raw_messages.raw(self, "481", self._nickname,
                                                     "Permission Denied - You do not have the correct privileges to kill a channel")
 
                                         else:
-                                            raw(self, "401", self._nickname, param[0])
+                                            raw_messages.raw(self, "401", self._nickname, param[0])
 
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "DIE":
@@ -3392,21 +2854,21 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 for each in nickname_to_client_mapping_entries:
                                                     e = nickname_to_client_mapping_entries[each]
                                                     e.send(
-                                                        ":" + ServerName +
+                                                        ":" + server_name +
                                                         " NOTICE SERVER :*** This Server has been closed by the Network Administrator\r\n")
                                                     e.client.shutdown(1)
 
                                                 os._exit(1)
                                             else:
-                                                raw(self, "908", self._nickname)
+                                                raw_messages.raw(self, "908", self._nickname)
                                         else:
-                                            raw(self, "481", self._nickname,
+                                            raw_messages.raw(self, "481", self._nickname,
                                                 "Permission Denied - You're not the Network Administrator")
 
                                 elif param[0] == "STATS":
                                     if param[1] == "G":
                                         self.send(
-                                            ":" + ServerName + " NOTICE STATS :*** Viewing Online guides '" + param[1]
+                                            ":" + server_name + " NOTICE STATS :*** Viewing Online guides '" + param[1]
                                             [0] + "' \r\n")
                                         foundguide = False
                                         for each in nickname_to_client_mapping_entries:
@@ -3416,177 +2878,177 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if opid.guide:
                                                     foundguide = True
                                                     self.send(
-                                                        ":" + ServerName + " NOTICE STATS :*** " + nickid._nickname +
+                                                        ":" + server_name + " NOTICE STATS :*** " + nickid._nickname +
                                                         " is available for help\r\n")
 
                                         if foundguide == False:
                                             self.send(
-                                                ":" + ServerName +
+                                                ":" + server_name +
                                                 " NOTICE STATS :*** Sorry, there are no guides available\r\n")
 
                                     elif opid:
                                         if opid.operator_level < 3:
-                                            raw(self, "481", self._nickname,
+                                            raw_messages.raw(self, "481", self._nickname,
                                                 "Permission Denied - You're not a Server Administrator")
                                         else:
                                             if param[1] == "U":
                                                 self.send(
-                                                    ":" + ServerName + " NOTICE STATS :*** Viewing User statistics '" +
+                                                    ":" + server_name + " NOTICE STATS :*** Viewing User statistics '" +
                                                     param[1][0] + "' \r\n")
                                                 self.send(
-                                                    ":" + ServerName + " 212 " + self._nickname + " :Max Users: " + MaxUsers + "\r\n")
+                                                    ":" + server_name + " 212 " + self._nickname + " :Max Users: " + MaxUsers + "\r\n")
                                                 self.send(
-                                                    ":" + ServerName + " 212 " + self._nickname +
+                                                    ":" + server_name + " 212 " + self._nickname +
                                                     " :Max Users per connection: " + str(
                                                         MaxUsersPerConnection) + "\r\n")
 
                                             elif param[1] == "E":
                                                 self.send(
-                                                    ":" + ServerName + " NOTICE STATS :*** Viewing Error statistics '" +
+                                                    ":" + server_name + " NOTICE STATS :*** Viewing Error statistics '" +
                                                     param[1][0] + "' \r\n")
                                                 for every in _lastError:
                                                     self.send(
-                                                        ":" + ServerName + " NOTICE STATS :*** Error found on " +
+                                                        ":" + server_name + " NOTICE STATS :*** Error found on " +
                                                         every[1][0] + " by " + every[1][1] + "\r\n")
                                                     self.send(
-                                                        ":" + ServerName + " 212 " + self._nickname + " :%s\r\n" %
+                                                        ":" + server_name + " 212 " + self._nickname + " :%s\r\n" %
                                                         (str(every[2][0])))
                                                     self.send(
-                                                        ":" + ServerName + " 212 " + self._nickname + " :%s\r\n" %
+                                                        ":" + server_name + " 212 " + self._nickname + " :%s\r\n" %
                                                         (str(every[0][0])))
                                                     self.send(
-                                                        ":" + ServerName + " 212 " + self._nickname + " :%s\r\n" %
+                                                        ":" + server_name + " 212 " + self._nickname + " :%s\r\n" %
                                                         (str(every[0][1])))
 
-                                                self.send(":" + ServerName + " NOTICE STATS :*** Finished listing\r\n")
+                                                self.send(":" + server_name + " NOTICE STATS :*** Finished listing\r\n")
 
                                             elif param[1] == "O":
-                                                self.send(":" + ServerName +
+                                                self.send(":" + server_name +
                                                           " NOTICE STATS :*** Viewing Operator statistics '" +
                                                           param[1][0] + "' \r\n")
                                                 for oline in operlines:
                                                     if "A" in oline.flags:
                                                         self.send(
-                                                            ":" + ServerName + " 212 " + self._nickname + " :[A] - " + oline.username + " - " + oline.flags + " (Network Administrator)\r\n")
+                                                            ":" + server_name + " 212 " + self._nickname + " :[A] - " + oline.username + " - " + oline.flags + " (Network Administrator)\r\n")
                                                     elif "O" in oline.flags:
                                                         self.send(
-                                                            ":" + ServerName + " 212 " + self._nickname + " :[O] - " + oline.username + " - " + oline.flags + " (Server Administrator)\r\n")
+                                                            ":" + server_name + " 212 " + self._nickname + " :[O] - " + oline.username + " - " + oline.flags + " (Server Administrator)\r\n")
                                                     elif "a" in oline.flags:
                                                         self.send(
-                                                            ":" + ServerName + " 212 " + self._nickname + " :[a] - " + oline.username + " - " + oline.flags + " (System Chat Manager)\r\n")
+                                                            ":" + server_name + " 212 " + self._nickname + " :[a] - " + oline.username + " - " + oline.flags + " (System Chat Manager)\r\n")
                                                     elif "o" in oline.flags:
                                                         self.send(
-                                                            ":" + ServerName + " 212 " + self._nickname + " :[o] - " + oline.username + " - " + oline.flags + " (System Operator)\r\n")
+                                                            ":" + server_name + " 212 " + self._nickname + " :[o] - " + oline.username + " - " + oline.flags + " (System Operator)\r\n")
 
                                             elif param[1] == "P":
                                                 self.send(
-                                                    ":" + ServerName + " NOTICE STATS :*** Viewing Port statistics '" +
+                                                    ":" + server_name + " NOTICE STATS :*** Viewing Port statistics '" +
                                                     param[1][0] + "' \r\n")
                                                 for each in list(currentports.keys()):
-                                                    self.send(":" + ServerName + " 212 " + self._nickname +
+                                                    self.send(":" + server_name + " 212 " + self._nickname +
                                                               " :Running server on: " + each + "\r\n")
 
                                             elif param[1] == "F":
-                                                self.send(":" + ServerName +
+                                                self.send(":" + server_name +
                                                           " NOTICE STATS :*** Viewing Filter statistics '" +
                                                           param[1][0] + "' \r\n")
 
                                                 # TODO violating encapsulation of filters still
                                                 for f in filtering._filters:
                                                     if f.filter_type == "chan":
-                                                        self.send(":" + ServerName + " 212 " + self._nickname +
+                                                        self.send(":" + server_name + " 212 " + self._nickname +
                                                                   " :Channel filter - '" + f.filter_string + "' - Level "
                                                                   + f.override + " overrides\r\n")
                                                     elif f.level == "nick":
-                                                        self.send(":" + ServerName + " 212 " + self._nickname +
+                                                        self.send(":" + server_name + " 212 " + self._nickname +
                                                                   " :Nickname filter - '" + f.filter_string +
                                                                   "' - Level " + f.override + " overrides\r\n")
                                                     elif f.filter_type == "profanity":
-                                                        self.send(":" + ServerName + " 212 " + self._nickname +
+                                                        self.send(":" + server_name + " 212 " + self._nickname +
                                                                   " :Profanity filter - '" + f.filter_string +
                                                                   "' - Level " + f.override + " overrides\r\n")
 
                                             elif param[1] == "D":
-                                                self.send(":" + ServerName +
+                                                self.send(":" + server_name +
                                                           " NOTICE STATS :*** Viewing Disabled statistics '" +
                                                           param[1][0] + "' \r\n")
                                                 for each in disabled_functionality:
                                                     self.send(
-                                                        ":" + ServerName + " 212 " + self._nickname + " :" + each + "\r\n")
+                                                        ":" + server_name + " 212 " + self._nickname + " :" + each + "\r\n")
 
                                             elif param[1] == "C":
-                                                self.send(":" + ServerName +
+                                                self.send(":" + server_name +
                                                           " NOTICE STATS :*** Viewing Channel statistics '" +
                                                           param[1][0] + "' \r\n")
-                                                self.send(":" + ServerName + " 212 " + self._nickname +
+                                                self.send(":" + server_name + " 212 " + self._nickname +
                                                           " :Creation Modes: " + DefaultModes + "\r\n")
                                                 self.send(
-                                                    ":" + ServerName + " 212 " + self._nickname + " :Max Channels: " +
+                                                    ":" + server_name + " 212 " + self._nickname + " :Max Channels: " +
                                                     MaxChannels + "\r\n")
-                                                self.send(":" + ServerName + " 212 " + self._nickname +
+                                                self.send(":" + server_name + " 212 " + self._nickname +
                                                           " :Max Channels per User: " + MaxChannelsPerUser + "\r\n")
 
                                             else:
-                                                self.send(":" + ServerName +
+                                                self.send(":" + server_name +
                                                           " NOTICE STATS :*** No statistics available for '" +
                                                           param[1][0] + "' \r\n")
 
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "REHASH":
                                     if opid:
                                         if opid.operator_level >= 4:
                                             sendAdminOpers(
-                                                ":" + ServerName + " NOTICE CONFIG :*** " + self._nickname +
+                                                ":" + server_name + " NOTICE CONFIG :*** " + self._nickname +
                                                 " is rehashing the server config file\r\n")
                                             rehash()
-                                            sendAdminOpers(":" + ServerName +
+                                            sendAdminOpers(":" + server_name +
                                                            " NOTICE CONFIG :*** The server has been rehashed\r\n")
 
                                         else:
-                                            raw(self, "481", self._nickname,
+                                            raw_messages.raw(self, "481", self._nickname,
                                                 "Permission Denied - You're not the Network Administrator")
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System Operator")
 
                                 elif param[0] == "GAG":
                                     if opid:
                                         if cid:
                                             if cid in operator_entries:
-                                                raw(self, "481", self._nickname,
+                                                raw_messages.raw(self, "481", self._nickname,
                                                     "Permission Denied - Can't /GAG another Operator")
                                             else:
-                                                cid.send(":%s MODE %s +z\r\n" % (ServerName, cid._nickname))
-                                                self.send(":" + ServerName + " NOTICE GAG :*** " + self._nickname +
+                                                cid.send(":%s MODE %s +z\r\n" % (server_name, cid._nickname))
+                                                self.send(":" + server_name + " NOTICE GAG :*** " + self._nickname +
                                                           " Added " + cid._nickname + " to the GAG list\r\n")
                                                 cid._MODE_gag = True
                                                 if "z" not in cid._MODE_:
                                                     cid._MODE_ = cid._MODE_ + "z"
                                         else:
-                                            raw(self, "401", self._nickname, param[1])
+                                            raw_messages.raw(self, "401", self._nickname, param[1])
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "UNGAG":
                                     if opid:
                                         if cid:
                                             if cid in operator_entries:
-                                                raw(self, "481", self._nickname,
+                                                raw_messages.raw(self, "481", self._nickname,
                                                     "Permission Denied - Can't use /UNGAG with another Operator")
                                             else:
-                                                cid.send(":%s MODE %s -z\r\n" % (ServerName, cid._nickname))
-                                                self.send(":" + ServerName + " NOTICE GAG :*** " + self._nickname +
+                                                cid.send(":%s MODE %s -z\r\n" % (server_name, cid._nickname))
+                                                self.send(":" + server_name + " NOTICE GAG :*** " + self._nickname +
                                                           " Removed " + cid._nickname + " from the GAG list\r\n")
                                                 cid._MODE_gag = False
                                                 cid._MODE_.replace("z", "")
                                         else:
-                                            raw(self, "401", self._nickname, param[1])
+                                            raw_messages.raw(self, "401", self._nickname, param[1])
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "GLOBAL":
@@ -3599,10 +3061,10 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     strdata.split(" ", 1)[1] + "\r\n")
 
                                         else:
-                                            raw(self, "481", self._nickname,
+                                            raw_messages.raw(self, "481", self._nickname,
                                                 "Permission Denied - You're not an Administrator")
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "SNAME":
@@ -3610,29 +3072,29 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         if cid:
                                             if copid and copid != opid:
                                                 self.send(
-                                                    ":" + ServerName +
+                                                    ":" + server_name +
                                                     " NOTICE SERVER :*** Cannot use /SNAME on another operator\r\n")
                                             else:
                                                 if len(param) == 2:
                                                     cid._friendlyname = ""
                                                     self.send(
-                                                        ":" + ServerName +
+                                                        ":" + server_name +
                                                         " NOTICE SERVER :*** Removed friendly name of " + cid._nickname +
                                                         "\r\n")
-                                                    cid.send(":%s MODE %s -X\r\n" % (ServerName, cid._nickname))
+                                                    cid.send(":%s MODE %s -X\r\n" % (server_name, cid._nickname))
                                                     cid._MODE_ = cid._MODE_.replace("X", "")
                                                 else:
                                                     cid._friendlyname = " ".join(param).split(" ", 2)[2]
-                                                    cid.send(":%s MODE %s +X\r\n" % (ServerName, cid._nickname))
+                                                    cid.send(":%s MODE %s +X\r\n" % (server_name, cid._nickname))
                                                     self.send(
-                                                        ":" + ServerName + " NOTICE SERVER :*** Changed the friendly name of " + cid._nickname + " to '" + cid._friendlyname + "'\r\n")
+                                                        ":" + server_name + " NOTICE SERVER :*** Changed the friendly name of " + cid._nickname + " to '" + cid._friendlyname + "'\r\n")
                                                     if "X" not in cid._MODE_:
                                                         cid._MODE_ = cid._MODE_ + "X"
 
                                         else:
-                                            raw(self, "401", self._nickname, param[1])
+                                            raw_messages.raw(self, "401", self._nickname, param[1])
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "CHGIDENT":
@@ -3642,22 +3104,22 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if self._validate(param[2]):
                                                     if copid:
                                                         self.send(
-                                                            ":" + ServerName +
+                                                            ":" + server_name +
                                                             " NOTICE SERVER :*** Cannot use /CHGIDENT on another operator\r\n")
                                                     else:
                                                         cid._username = param[2]
                                                         self.send(
-                                                            ":" + ServerName + " NOTICE SERVER :*** Changed the username of " + cid._nickname + " to '" +
+                                                            ":" + server_name + " NOTICE SERVER :*** Changed the username of " + cid._nickname + " to '" +
                                                             param[2] + "'\r\n")
                                                 else:
-                                                    raw(self, "434", self._nickname, param[1])
+                                                    raw_messages.raw(self, "434", self._nickname, param[1])
                                             else:
-                                                raw(self, "401", self._nickname, param[1])
+                                                raw_messages.raw(self, "401", self._nickname, param[1])
                                         else:
-                                            raw(self, "481", self._nickname,
+                                            raw_messages.raw(self, "481", self._nickname,
                                                 "Permission Denied - You're not an Administrator")
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "CHGHOST":
@@ -3667,24 +3129,24 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if self._validate(param[2].replace(".", "a").replace("/", "a")):
                                                     if copid:
                                                         self.send(
-                                                            ":" + ServerName +
+                                                            ":" + server_name +
                                                             " NOTICE SERVER :*** Cannot use /CHGHOST on another operator\r\n")
                                                     else:
                                                         cid._hostmask = param[2]
                                                         self.send(
-                                                            ":" + ServerName + " NOTICE SERVER :*** Changed the hostmask of " + cid._nickname + " to '" +
+                                                            ":" + server_name + " NOTICE SERVER :*** Changed the hostmask of " + cid._nickname + " to '" +
                                                             param[2] + "'\r\n")
                                                 else:
                                                     self.send(
-                                                        ":" + ServerName +
+                                                        ":" + server_name +
                                                         " NOTICE SERVER :Invalid hosname, hostname must contain only letters and numbers\r\n")
                                             else:
-                                                raw(self, "401", self._nickname, param[1])
+                                                raw_messages.raw(self, "401", self._nickname, param[1])
                                         else:
-                                            raw(self, "481", self._nickname,
+                                            raw_messages.raw(self, "481", self._nickname,
                                                 "Permission Denied - You're not an Administrator")
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "CHGNAME":
@@ -3694,22 +3156,22 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if self._validatefullname(strdata.split(" ", 2)[2].replace(".", "a")):
                                                     if copid:
                                                         self.send(
-                                                            ":" + ServerName +
+                                                            ":" + server_name +
                                                             " NOTICE SERVER :*** Cannot use /CHGNAME on another operator\r\n")
                                                     else:
                                                         cid._fullname = strdata.split(" ", 2)[2].replace("  ", "")
                                                         self.send(
-                                                            ":" + ServerName + " NOTICE SERVER :*** Changed the fullname of " + cid._nickname + " to '" +
+                                                            ":" + server_name + " NOTICE SERVER :*** Changed the fullname of " + cid._nickname + " to '" +
                                                             strdata.split(" ", 2)[2] + "'\r\n")
                                                 else:
-                                                    self.send(":" + ServerName + " NOTICE SERVER :Invalid fullname\r\n")
+                                                    self.send(":" + server_name + " NOTICE SERVER :Invalid fullname\r\n")
                                             else:
-                                                raw(self, "401", self._nickname, param[1])
+                                                raw_messages.raw(self, "401", self._nickname, param[1])
                                         else:
-                                            raw(self, "481", self._nickname,
+                                            raw_messages.raw(self, "481", self._nickname,
                                                 "Permission Denied - You're not an Administrator")
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "SETIDENT":
@@ -3718,12 +3180,12 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                             self._username = param[1]
 
                                             self.send(
-                                                ":" + ServerName + " NOTICE SERVER :*** Your username is now '" +
+                                                ":" + server_name + " NOTICE SERVER :*** Your username is now '" +
                                                 param[1] + "'\r\n")
                                         else:
-                                            raw(self, "434", self._nickname, param[1])
+                                            raw_messages.raw(self, "434", self._nickname, param[1])
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "SETHOST":
@@ -3732,14 +3194,14 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                             self._hostmask = param[1]
 
                                             self.send(
-                                                ":" + ServerName + " NOTICE SERVER :*** Your hostname is now '" +
+                                                ":" + server_name + " NOTICE SERVER :*** Your hostname is now '" +
                                                 param[1] + "'\r\n")
                                         else:
                                             self.send(
-                                                ":" + ServerName +
+                                                ":" + server_name +
                                                 " NOTICE SERVER :Invalid hosname, hostname must contain only letters and numbers\r\n")
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "SETNAME":
@@ -3747,15 +3209,15 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         if self._validatefullname(
                                                 strdata.split(" ", 1)[1].replace(" ", "a").replace("/", "a")):
                                             self._fullname = strdata.split(" ", 1)[1].replace("  ", "")
-                                            self.send(":" + ServerName + " NOTICE SERVER :*** Your fullname is now '" +
+                                            self.send(":" + server_name + " NOTICE SERVER :*** Your fullname is now '" +
                                                       strdata.split(" ", 1)[1] + "'\r\n")
 
                                         else:
                                             self.send(
-                                                ":" + ServerName +
+                                                ":" + server_name +
                                                 " NOTICE SERVER :Invalid fullname, please choose a more suitable fullname\r\n")
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System operator")
 
                                 elif param[0] == "MODE":
@@ -3766,17 +3228,17 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         if chanid:
                                             if isSecret(chanid,
                                                         "private") and self._nickname.lower() not in operator_entries and self._nickname.lower() not in chanid._users:
-                                                raw(self, "331", self._nickname, chanid.channelname)
+                                                raw_messages.raw(self, "331", self._nickname, chanid.channelname)
                                             else:
                                                 if chanid._topic != "":
-                                                    raw(self, "332", self._nickname, chanid.channelname, chanid._topic)
-                                                    raw(self, "333", self._nickname, chanid.channelname,
+                                                    raw_messages.raw(self, "332", self._nickname, chanid.channelname, chanid._topic)
+                                                    raw_messages.raw(self, "333", self._nickname, chanid.channelname,
                                                         chanid._topic_nick, chanid._topic_time)
 
                                                 else:
-                                                    raw(self, "331", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "331", self._nickname, chanid.channelname)
                                         else:
-                                            raw(self, "403", self._nickname, param[1])
+                                            raw_messages.raw(self, "403", self._nickname, param[1])
 
                                     else:
                                         if chanid:
@@ -3788,7 +3250,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                                 if dotopic:
                                                     if chanid.MODE_ownertopic and self._nickname.lower() not in chanid._owner:
-                                                        raw(self, "485", self._nickname, chanid.channelname)
+                                                        raw_messages.raw(self, "485", self._nickname, chanid.channelname)
                                                     else:
                                                         chanid._topic = param[2]
                                                         if chanid._topic[0] == ":":
@@ -3807,11 +3269,11 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                 self._nickname, self._username, self._hostmask,
                                                                 chanid.channelname, chanid._topic))
                                                 else:
-                                                    raw(self, "482", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "482", self._nickname, chanid.channelname)
                                             else:
-                                                raw(self, "442", self._nickname, chanid.channelname)
+                                                raw_messages.raw(self, "442", self._nickname, chanid.channelname)
                                         else:
-                                            raw(self, "403", self._nickname, param[1])
+                                            raw_messages.raw(self, "403", self._nickname, param[1])
 
                                 elif param[0] == "OPER":
                                     Oper_function(self, param)
@@ -3831,12 +3293,12 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                 if cid._nickname.lower() in chanid._op or cid._nickname.lower() in chanid._owner or self._nickname.lower() in chanid._op or self._nickname.lower() in chanid._owner:
                                                                     if self._MODE_nowhisper and self._nickname.lower() not in operator_entries:
                                                                         self.send(
-                                                                            ":" + ServerName +
+                                                                            ":" + server_name +
                                                                             " NOTICE SERVER :*** You cannot whisper if +P is set\r\n")
                                                                     else:
                                                                         if cid._MODE_nowhisper:
                                                                             self.send(
-                                                                                ":" + ServerName +
+                                                                                ":" + server_name +
                                                                                 " NOTICE SERVER :*** This user has chosen not to receive whispers\r\n")
                                                                         else:
                                                                             cid.send(
@@ -3845,16 +3307,16 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                                 self._hostmask, chanid.channelname,
                                                                                 cid._nickname, wmsg))
                                                                 else:
-                                                                    raw(self, "923", self._nickname, chanid.channelname)
+                                                                    raw_messages.raw(self, "923", self._nickname, chanid.channelname)
                                                             else:
                                                                 if self._MODE_nowhisper and self._nickname.lower() not in operator_entries:
                                                                     self.send(
-                                                                        ":" + ServerName +
+                                                                        ":" + server_name +
                                                                         " NOTICE SERVER :*** You cannot whisper if +P is set\r\n")
                                                                 else:
                                                                     if cid._MODE_nowhisper:
                                                                         self.send(
-                                                                            ":" + ServerName +
+                                                                            ":" + server_name +
                                                                             " NOTICE SERVER :*** This user has chosen not to receive whispers\r\n")
                                                                     else:
                                                                         cid.send(
@@ -3863,22 +3325,22 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                             self._hostmask, chanid.channelname,
                                                                             cid._nickname, wmsg))
                                                     else:
-                                                        raw(self, "412", self._nickname, param[0])
+                                                        raw_messages.raw(self, "412", self._nickname, param[0])
                                                 else:
-                                                    raw(self, "441", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "441", self._nickname, chanid.channelname)
                                             else:
-                                                raw(self, "401", self._nickname, param[2])
+                                                raw_messages.raw(self, "401", self._nickname, param[2])
                                         else:
-                                            raw(self, "442", self._nickname, chanid.channelname)
+                                            raw_messages.raw(self, "442", self._nickname, chanid.channelname)
                                     else:
-                                        raw(self, "403", self._nickname, param[1])
+                                        raw_messages.raw(self, "403", self._nickname, param[1])
 
                                 elif param[0] == "PRIVMSG" or param[0] == "NOTICE":
                                     try:
                                         if len(param) == 2:
-                                            raw(self, "412", self._nickname, param[0])  # no text to send
+                                            raw_messages.raw(self, "412", self._nickname, param[0])  # no text to send
                                         elif param[2] == ":" and len(param) == 3:
-                                            raw(self, "412", self._nickname, param[0])  # no text to send
+                                            raw_messages.raw(self, "412", self._nickname, param[0])  # no text to send
 
                                         elif param[1].upper() == "NICKSERV":  # support for /msg nickserv
                                             Nickserv_function(self, param[1:], param[0])
@@ -3896,7 +3358,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                                 if recipient not in operator_entries and self._MODE_gag:
                                                     self.send(
-                                                        ":" + ServerName +
+                                                        ":" + server_name +
                                                         " NOTICE GAG :*** You are unable to participate because you are on the server GAG list\r\n")
                                                 else:
 
@@ -3971,10 +3433,10 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                                 cclientid._nickname, msg))
 
                                                                     else:
-                                                                        raw(self, "481", self._nickname,
+                                                                        raw_messages.raw(self, "481", self._nickname,
                                                                             "Permission Denied - You're not an Administratorr")
                                                             else:
-                                                                raw(self, "481", self._nickname,
+                                                                raw_messages.raw(self, "481", self._nickname,
                                                                     "Permission Denied - You're not a System operator")
 
                                                         elif recip:
@@ -4002,7 +3464,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                                             if self._MODE_private and self._nickname.lower() not in operator_entries:
                                                                 self.send(
-                                                                    ":" + ServerName +
+                                                                    ":" + server_name +
                                                                     " NOTICE SERVER :*** You cannot send private messages if +p is set\r\n")
                                                             else:
                                                                 if recip._MODE_private == False or self._nickname.lower() in operator_entries:  # opers can send messages to users with private set
@@ -4020,7 +3482,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                                                         if foundprofanity:
                                                                             self.send(
-                                                                                ":" + ServerName +
+                                                                                ":" + server_name +
                                                                                 " NOTICE SERVER :*** This user has chosen not to receive filtered content\r\n")
                                                                             sendprivmsg = False
 
@@ -4028,7 +3490,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                                                         if recip._MODE_registerchat and self._MODE_register == False and self._nickname.lower() not in operator_entries and self != recip:
                                                                             self.send(
-                                                                                ":" + ServerName +
+                                                                                ":" + server_name +
                                                                                 " NOTICE SERVER :*** Cannot send a message to this user, you must register or identify your nickname to services first\r\n")
                                                                         else:
                                                                             if recipient.lower() in nickname_to_client_mapping_entries:
@@ -4040,22 +3502,22 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                                                 else:
                                                                     self.send(
-                                                                        ":" + ServerName +
+                                                                        ":" + server_name +
                                                                         " NOTICE SERVER :*** This user has chosen not to receive  filtered content\r\n")
 
                                                         else:
-                                                            raw(self, "401", self._nickname, recipient)
+                                                            raw_messages.raw(self, "401", self._nickname, recipient)
 
                                                 iloop += 1
 
                                             del chans
 
                                     except IndexError:
-                                        raw(self, "411", self._nickname, param[0])
+                                        raw_messages.raw(self, "411", self._nickname, param[0])
 
                                 elif param[0] == "INVITE":
                                     if self._MODE_inviteblock:
-                                        raw(self, "998", self._nickname, self._nickname, "*")
+                                        raw_messages.raw(self, "998", self._nickname, self._nickname, "*")
                                     else:
                                         if param[2].lower() in channel_entries:
                                             chanid = channel_entries[param[2].lower()]
@@ -4064,12 +3526,12 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     if self._nickname.lower() in chanid._op or self._nickname.lower() in chanid._owner:
                                                         cid = nickname_to_client_mapping_entries[param[1].lower()]
                                                         if cid._MODE_inviteblock:
-                                                            raw(self, "998", self._nickname,
+                                                            raw_messages.raw(self, "998", self._nickname,
                                                                 cid._nickname, chanid.channelname)
                                                         else:
                                                             if param[1].lower() in chanid._users and param[
                                                                 1].lower() not in chanid._watch:
-                                                                raw(self, "443", self._nickname,
+                                                                raw_messages.raw(self, "443", self._nickname,
                                                                     cid._nickname, chanid.channelname)
                                                             else:
 
@@ -4078,7 +3540,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                     sendinvite = False
 
                                                                 if sendinvite:
-                                                                    raw(self, "341", self._nickname,
+                                                                    raw_messages.raw(self, "341", self._nickname,
                                                                         cid._nickname, chanid.channelname)
                                                                     cid.send(
                                                                         ":%s!%s@%s INVITE %s :%s\r\n" %
@@ -4086,13 +3548,13 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                          cid._nickname, chanid.channelname))
                                                                     cid._invites.append(chanid.channelname.lower())
                                                     else:
-                                                        raw(self, "482", self._nickname, chanid.channelname)
+                                                        raw_messages.raw(self, "482", self._nickname, chanid.channelname)
                                                 else:
-                                                    raw(self, "401", self._nickname, param[1])
+                                                    raw_messages.raw(self, "401", self._nickname, param[1])
                                             else:
-                                                raw(self, "442", self._nickname, chanid.channelname)
+                                                raw_messages.raw(self, "442", self._nickname, chanid.channelname)
                                         else:
-                                            raw(self, "403", self._nickname, param[2])
+                                            raw_messages.raw(self, "403", self._nickname, param[2])
 
                                 elif param[0] == "PART":
                                     iloop = 0
@@ -4101,7 +3563,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         if chan:
                                             chan.part(self._nickname)
                                         else:
-                                            raw(self, "403", self._nickname, param[1].split(",")[iloop])
+                                            raw_messages.raw(self, "403", self._nickname, param[1].split(",")[iloop])
 
                                         iloop += 1
 
@@ -4109,12 +3571,12 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                     if chanid:
                                         chanid.sendnames(self._nickname)  # send when requested
                                     elif param[1][0] == "*":
-                                        raw(self, "481", self._nickname, "Permission Denied")
+                                        raw_messages.raw(self, "481", self._nickname, "Permission Denied")
                                     else:
-                                        raw(self, "403", self._nickname, param[1])
+                                        raw_messages.raw(self, "403", self._nickname, param[1])
 
                                 elif param[0] == "LISTC":
-                                    raw(self, "321", self._nickname)
+                                    raw_messages.raw(self, "321", self._nickname)
                                     for chanid in getGlobalChannels():
                                         chanusers = str(len(chanid._users) - len(chanid._watch))
                                         if chanid.MODE_auditorium and self._nickname.lower() not in operator_entries and isOp(
@@ -4128,17 +3590,17 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         if chanid._prop.subject.upper() == sub.upper():
                                             if isSecret(chanid, "hidden"):
                                                 if self._nickname.lower() in chanid._users or self._nickname.lower() in operator_entries:
-                                                    raw(self, "322", self._nickname,
+                                                    raw_messages.raw(self, "322", self._nickname,
                                                         chanid.channelname, chanusers, chanid._topic)
                                             else:
-                                                raw(self, "322", self._nickname,
+                                                raw_messages.raw(self, "322", self._nickname,
                                                     chanid.channelname, chanusers, chanid._topic)
 
-                                    raw(self, "323", self._nickname)
+                                    raw_messages.raw(self, "323", self._nickname)
 
                                 elif param[0] == "LIST" or param[0] == "LISTX":
                                     try:
-                                        raw(self, "321", self._nickname)
+                                        raw_messages.raw(self, "321", self._nickname)
                                         for chanid in getGlobalChannels():
                                             chanusers = str(len(chanid._users) - len(chanid._watch))
                                             if chanid.MODE_auditorium and self._nickname.lower() not in operator_entries and isOp(
@@ -4147,7 +3609,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                             if isSecret(chanid, "hidden"):
                                                 if self._nickname.lower() in chanid._users or self._nickname.lower() in operator_entries:
-                                                    raw(self, "322", self._nickname,
+                                                    raw_messages.raw(self, "322", self._nickname,
                                                         chanid.channelname, chanusers, chanid._topic)
                                             else:
                                                 if param[0] == "LISTX" and len(param) == 2:
@@ -4156,40 +3618,40 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                         if len(param[1].split("<")) == 2:
                                                             lowerthanparam = param[1].split("<")[1].split(",")[0]
                                                         if myint(chanusers) < myint(lowerthanparam):
-                                                            raw(self, "322", self._nickname,
+                                                            raw_messages.raw(self, "322", self._nickname,
                                                                 chanid.channelname, chanusers, chanid._topic)
 
                                                     elif ">" in param[1]:
                                                         if len(param[1].split(">")) == 2:
                                                             lowerthanparam = param[1].split(">")[1].split(",")[0]
                                                         if myint(chanusers) > myint(lowerthanparam):
-                                                            raw(self, "322", self._nickname,
+                                                            raw_messages.raw(self, "322", self._nickname,
                                                                 chanid.channelname, chanusers, chanid._topic)
                                                     elif "R=0" == param[1]:
                                                         if chanid.MODE_registered == False:
-                                                            raw(self, "322", self._nickname,
+                                                            raw_messages.raw(self, "322", self._nickname,
                                                                 chanid.channelname, chanusers, chanid._topic)
 
                                                     elif "IRCX=0" == param[1]:
                                                         if chanid.MODE_noircx:
-                                                            raw(self, "322", self._nickname,
+                                                            raw_messages.raw(self, "322", self._nickname,
                                                                 chanid.channelname, chanusers, chanid._topic)
 
                                                     elif "IRCX=1" == param[1]:
                                                         if chanid.MODE_noircx == False:
-                                                            raw(self, "322", self._nickname,
+                                                            raw_messages.raw(self, "322", self._nickname,
                                                                 chanid.channelname, chanusers, chanid._topic)
 
                                                     elif "R=1" == param[1]:
                                                         if chanid.MODE_registered:
-                                                            raw(self, "322", self._nickname,
+                                                            raw_messages.raw(self, "322", self._nickname,
                                                                 chanid.channelname, chanusers, chanid._topic)
 
                                                     elif "N=" in param[1]:
                                                         try:
                                                             matchstring = param[1].split("=", 1)[1].lower()
                                                             if matchstring in chanid.channelname.lower():
-                                                                raw(self, "322", self._nickname,
+                                                                raw_messages.raw(self, "322", self._nickname,
                                                                     chanid.channelname, chanusers, chanid._topic)
 
                                                         except:
@@ -4199,35 +3661,35 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                         try:
                                                             matchstring = param[1].split("=", 1)[1].lower()
                                                             if matchstring in chanid._topic.lower():
-                                                                raw(self, "322", self._nickname,
+                                                                raw_messages.raw(self, "322", self._nickname,
                                                                     chanid.channelname, chanusers, chanid._topic)
 
                                                         except:
                                                             pass
 
                                                     else:
-                                                        raw(self, "322", self._nickname,
+                                                        raw_messages.raw(self, "322", self._nickname,
                                                             chanid.channelname, chanusers, chanid._topic)
 
                                                 else:
-                                                    raw(self, "322", self._nickname,
+                                                    raw_messages.raw(self, "322", self._nickname,
                                                         chanid.channelname, chanusers, chanid._topic)
                                     except:
                                         pass
 
-                                    raw(self, "323", self._nickname)
+                                    raw_messages.raw(self, "323", self._nickname)
 
                                 elif param[0] == "ACCESS":
                                     if chanid:
                                         _Access.CheckChannelExpiry(chanid)
                                         if len(param) == 2:
                                             if chanid.MODE_noircx and self._nickname.lower() not in operator_entries:
-                                                raw(self, "997", self._nickname, chanid.channelname, param[0])
+                                                raw_messages.raw(self, "997", self._nickname, chanid.channelname, param[0])
                                             else:
                                                 if isOp(self._nickname, chanid.channelname) == False:
-                                                    raw(self, "913", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "913", self._nickname, chanid.channelname)
                                                 else:
-                                                    raw(self, "803", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "803", self._nickname, chanid.channelname)
                                                     for each in chanid.ChannelAccess:
                                                         if each._deleteafterexpire == False:
                                                             exp = 0
@@ -4239,31 +3701,31 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                         stringinf = "%s %s %s %d %s %s" % (
                                                             chanid.channelname, each._level, each._mask, exp,
                                                             each._setby, each._reason)
-                                                        raw(self, "804", self._nickname, stringinf)
+                                                        raw_messages.raw(self, "804", self._nickname, stringinf)
 
-                                                    raw(self, "805", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "805", self._nickname, chanid.channelname)
                                         else:
                                             try:
                                                 if chanid.MODE_noircx and self._nickname.lower() not in operator_entries:
-                                                    raw(self, "997", self._nickname, chanid.channelname, param[0])
+                                                    raw_messages.raw(self, "997", self._nickname, chanid.channelname, param[0])
 
                                                 elif chanid.MODE_ownersetaccess and self._nickname.lower() not in chanid._owner and self._nickname.lower() not in operator_entries:
-                                                    raw(self, "485", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "485", self._nickname, chanid.channelname)
 
                                                 elif param[2].upper() == "ADD":
                                                     if param[3].upper() == "DENY" or param[3].upper() == "GRANT" or \
                                                             param[3].upper() == "VOICE" or param[3].upper() == "HOST" or \
                                                             param[3].upper() == "OWNER":
                                                         if len(chanid.ChannelAccess) > myint(MaxChannelEntries):
-                                                            raw(self, "916", self._nickname, chanid.channelname)
+                                                            raw_messages.raw(self, "916", self._nickname, chanid.channelname)
                                                         else:  # ACCESS # ADD OWNER
                                                             if len(param) == 4:
                                                                 param.append("*!*@*$*")
                                                             _mask = _Access.CreateMaskString(param[4])
                                                             if _mask == -1:
-                                                                raw(self, "906", self._nickname, param[4])
+                                                                raw_messages.raw(self, "906", self._nickname, param[4])
                                                             elif _mask == -2:
-                                                                raw(self, "909", self._nickname)
+                                                                raw_messages.raw(self, "909", self._nickname)
                                                             else:
                                                                 tag, exp = "", 0
                                                                 if len(param) >= 6:
@@ -4281,21 +3743,21 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                     stringinf = "%s %s %s %d %s %s" % (
                                                                         chanid.channelname, param[3].upper(),
                                                                         _mask, exp, self._hostmask, tag)
-                                                                    raw(self, "801", self._nickname, stringinf)
+                                                                    raw_messages.raw(self, "801", self._nickname, stringinf)
 
                                                                 elif _addrec == -1:
-                                                                    raw(self, "914", self._nickname, chanid.channelname)
+                                                                    raw_messages.raw(self, "914", self._nickname, chanid.channelname)
 
                                                                 elif _addrec == -2:
-                                                                    raw(self, "913", self._nickname, chanid.channelname)
+                                                                    raw_messages.raw(self, "913", self._nickname, chanid.channelname)
                                                                 else:
                                                                     pass
                                                     else:
-                                                        raw(self, "903", self._nickname, chanid.channelname)
+                                                        raw_messages.raw(self, "903", self._nickname, chanid.channelname)
 
                                                 elif param[2].upper() == "DELETE":
                                                     if len(param) < 4:
-                                                        raw(self, "903", self._nickname, chanid.channelname)
+                                                        raw_messages.raw(self, "903", self._nickname, chanid.channelname)
                                                     else:
                                                         if param[3].upper() == "DENY" or param[3].upper() == "GRANT" or \
                                                                 param[3].upper() == "VOICE" or param[
@@ -4304,23 +3766,23 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                 param.append("*!*@*$*")
                                                             _mask = _Access.CreateMaskString(param[4])
                                                             if _mask == -1:
-                                                                raw(self, "906", self._nickname, param[4])
+                                                                raw_messages.raw(self, "906", self._nickname, param[4])
                                                             elif _mask == -2:
-                                                                raw(self, "909", self._nickname)
+                                                                raw_messages.raw(self, "909", self._nickname)
                                                             else:
                                                                 _delrec = _Access.DelRecord(
                                                                     self, chanid.channelname, param[3].upper(), _mask)
                                                                 if _delrec == 1:
                                                                     stringinf = "%s %s %s" % (
                                                                         chanid.channelname, param[3].upper(), _mask)
-                                                                    raw(self, "802", self._nickname, stringinf)
+                                                                    raw_messages.raw(self, "802", self._nickname, stringinf)
 
                                                                 elif _delrec == -1:
-                                                                    raw(self, "915", self._nickname, chanid.channelname)
+                                                                    raw_messages.raw(self, "915", self._nickname, chanid.channelname)
                                                                 elif _delrec == -2:
-                                                                    raw(self, "913", self._nickname, chanid.channelname)
+                                                                    raw_messages.raw(self, "913", self._nickname, chanid.channelname)
                                                         else:
-                                                            raw(self, "903", self._nickname, chanid.channelname)
+                                                            raw_messages.raw(self, "903", self._nickname, chanid.channelname)
 
                                                 elif param[2].upper() == "CLEAR":
                                                     if len(param) > 3:
@@ -4328,7 +3790,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                             3].upper() != "GRANT" and param[3].upper() != "VOICE" and \
                                                                 param[3].upper() != "HOST" and param[
                                                             3].upper() != "OWNER":
-                                                            raw(self, "900", self._nickname, param[3])
+                                                            raw_messages.raw(self, "900", self._nickname, param[3])
                                                         else:
                                                             _Access.ClearRecords(
                                                                 chanid.channelname, self, param[3].upper())
@@ -4338,9 +3800,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                                 elif param[2].upper() == "LIST":
                                                     if isOp(self._nickname, chanid.channelname) == False:
-                                                        raw(self, "913", self._nickname, chanid.channelname)
+                                                        raw_messages.raw(self, "913", self._nickname, chanid.channelname)
                                                     else:
-                                                        raw(self, "803", self._nickname, chanid.channelname)
+                                                        raw_messages.raw(self, "803", self._nickname, chanid.channelname)
                                                         for each in chanid.ChannelAccess:
                                                             if each._deleteafterexpire == False:
                                                                 exp = 0
@@ -4352,9 +3814,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                             stringinf = "%s %s %s %d %s %s" % (
                                                                 chanid.channelname, each._level, each._mask, exp,
                                                                 each._setby, each._reason)
-                                                            raw(self, "804", self._nickname, stringinf)
+                                                            raw_messages.raw(self, "804", self._nickname, stringinf)
 
-                                                        raw(self, "805", self._nickname, chanid.channelname)
+                                                        raw_messages.raw(self, "805", self._nickname, chanid.channelname)
 
                                                 elif param[2].upper() == "REGISTER":
                                                     operuser = isAdmin(self._nickname)
@@ -4367,10 +3829,10 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                 _founder = _Access.CreateMaskString(param[3])
                                                                 if _founder == -1:
                                                                     _founder = ""
-                                                                    raw(self, "906", self._nickname, param[4])
+                                                                    raw_messages.raw(self, "906", self._nickname, param[4])
                                                                 elif _founder == -2:
                                                                     _founder = ""
-                                                                    raw(self, "909", self._nickname)
+                                                                    raw_messages.raw(self, "909", self._nickname)
 
                                                                 else:
                                                                     _addrec = _Access.AddRecord(
@@ -4378,8 +3840,8 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                         "OWNER", _founder, 0, "")
                                                                     stringinf = "%s %s %s %d %s %s" % (
                                                                         chanid.channelname, "FOUNDER", _founder, 0,
-                                                                        ServerName, "")
-                                                                    raw(self, "801", self._nickname, stringinf)
+                                                                        server_name, "")
+                                                                    raw_messages.raw(self, "801", self._nickname, stringinf)
 
                                                             # Channel=#testModes=ntfrdSl 25Subject=AdultTopic=Chat related difficultiesfounderaccess=&chris
 
@@ -4389,7 +3851,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                 cclientid = nickname_to_client_mapping_entries[each]
                                                                 cclientid.send(
                                                                     ":%s MODE %s +r\r\n" %
-                                                                    (ServerName, chanid.channelname))
+                                                                    (server_name, chanid.channelname))
 
                                                             sendWatchOpers(
                                                                 "Notice -- The channel, '%s' has been registered (%s!%s@%s) [%s] \r\n" % (
@@ -4400,9 +3862,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                         else:
                                                             self.send(
                                                                 ":%s NOTICE %s :*** Notice -- Channel is already registered\r\n" % (
-                                                                ServerName, self._nickname))
+                                                                    server_name, self._nickname))
                                                     else:
-                                                        raw(self, "908", self._nickname)
+                                                        raw_messages.raw(self, "908", self._nickname)
 
                                                 elif param[2].upper() == "UNREGISTER":
                                                     operuser = isAdmin(self._nickname)
@@ -4418,7 +3880,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                 cclientid = nickname_to_client_mapping_entries[each]
                                                                 cclientid.send(
                                                                     ":%s MODE %s -r\r\n" %
-                                                                    (ServerName, chanid.channelname))
+                                                                    (server_name, chanid.channelname))
 
                                                             sendWatchOpers(
                                                                 "Notice -- The channel, '%s' has been unregistered (%s!%s@%s) [%s] \r\n" % (
@@ -4432,14 +3894,14 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                         else:
                                                             self.send(
                                                                 ":%s NOTICE %s :*** Notice -- Channel is not registered\r\n" % (
-                                                                ServerName, self._nickname))
+                                                                    server_name, self._nickname))
 
                                                     else:
-                                                        raw(self, "908", self._nickname)
+                                                        raw_messages.raw(self, "908", self._nickname)
                                                 else:
-                                                    raw(self, "900", self._nickname, param[1])
+                                                    raw_messages.raw(self, "900", self._nickname, param[1])
                                             except:
-                                                raw(self, "903", self._nickname, param[1])
+                                                raw_messages.raw(self, "903", self._nickname, param[1])
 
                                     elif param[1] == "*" or param[1] == "$" or param[
                                         1].upper() == self._nickname.upper():
@@ -4461,10 +3923,10 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     operlvl = True
 
                                             if operlvl == False and param[1] == "*":
-                                                raw(self, "913", self._nickname, param[1])
+                                                raw_messages.raw(self, "913", self._nickname, param[1])
                                             else:
                                                 if len(param) == 2:
-                                                    raw(self, "803", self._nickname, ret)
+                                                    raw_messages.raw(self, "803", self._nickname, ret)
                                                     for each in _list:
                                                         if each._deleteafterexpire == False:
                                                             exp = 0
@@ -4476,16 +3938,16 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                         stringinf = "%s %s %s %d %s %s" % (
                                                             ret, each._level, each._mask, exp, each._setby,
                                                             each._reason)
-                                                        raw(self, "804", self._nickname, stringinf)
+                                                        raw_messages.raw(self, "804", self._nickname, stringinf)
 
-                                                    raw(self, "805", self._nickname, ret)
+                                                    raw_messages.raw(self, "805", self._nickname, ret)
 
                                                 else:
 
                                                     try:
                                                         if param[2].upper() == "ADD":  # access * add deny test
                                                             if len(param) < 4:
-                                                                raw(self, "903", self._nickname, ret)
+                                                                raw_messages.raw(self, "903", self._nickname, ret)
                                                             else:
                                                                 if param[3].upper() == "DENY" or param[
                                                                     3].upper() == "GRANT":
@@ -4495,13 +3957,13 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                         _entries = MaxUserEntries
 
                                                                     if len(_list) > myint(_entries):
-                                                                        raw(self, "916", self._nickname, ret)
+                                                                        raw_messages.raw(self, "916", self._nickname, ret)
                                                                     else:
                                                                         _mask = _Access.CreateMaskString(param[4])
                                                                         if _mask == -1:
-                                                                            raw(self, "906", self._nickname, param[4])
+                                                                            raw_messages.raw(self, "906", self._nickname, param[4])
                                                                         elif _mask == -2:
-                                                                            raw(self, "909", self._nickname)
+                                                                            raw_messages.raw(self, "909", self._nickname)
                                                                         else:
                                                                             tag, exp = "", 0
                                                                             if len(param) >= 6:
@@ -4519,7 +3981,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                                 stringinf = "%s %s %s %d %s %s" % (
                                                                                     ret, param[3].upper(),
                                                                                     _mask, exp, self._hostmask, tag)
-                                                                                raw(self, "801", self._nickname,
+                                                                                raw_messages.raw(self, "801", self._nickname,
                                                                                     stringinf)
                                                                                 if ret == "*":
                                                                                     sendWatchOpers(
@@ -4533,32 +3995,32 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                                 WriteUsers(False, False, True)
 
                                                                             elif _addrec == -1:
-                                                                                raw(self, "914",
+                                                                                raw_messages.raw(self, "914",
                                                                                     self._nickname, param[1])
                                                                             else:
                                                                                 pass
 
                                                                 else:
-                                                                    raw(self, "903", self._nickname, ret)
+                                                                    raw_messages.raw(self, "903", self._nickname, ret)
 
                                                         elif param[2].upper() == "DELETE":
                                                             if len(param) < 4:
-                                                                raw(self, "903", self._nickname, ret)
+                                                                raw_messages.raw(self, "903", self._nickname, ret)
                                                             else:
                                                                 if param[3].upper() == "DENY" or param[
                                                                     3].upper() == "GRANT":
                                                                     _mask = _Access.CreateMaskString(param[4])
                                                                     if _mask == -1:
-                                                                        raw(self, "906", self._nickname, param[4])
+                                                                        raw_messages.raw(self, "906", self._nickname, param[4])
                                                                     elif _mask == -2:
-                                                                        raw(self, "909", self._nickname)
+                                                                        raw_messages.raw(self, "909", self._nickname)
                                                                     else:
                                                                         _delrec = _Access.DelRecord(
                                                                             self, ret, param[3].upper(), _mask)
                                                                         if _delrec == 1:
                                                                             stringinf = "%s %s %s" % (
                                                                                 ret, param[3].upper(), _mask)
-                                                                            raw(self, "802", self._nickname, stringinf)
+                                                                            raw_messages.raw(self, "802", self._nickname, stringinf)
                                                                             if ret == "*":
                                                                                 sendWatchOpers(
                                                                                     "Notice -- The record, '%s %s' was requested to be deleted (%s!%s@%s) [%s] \r\n" % (
@@ -4570,17 +4032,17 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                             WriteUsers(False, False, True)
 
                                                                         elif _delrec == -1:
-                                                                            raw(self, "915", self._nickname, ret)
+                                                                            raw_messages.raw(self, "915", self._nickname, ret)
                                                                         elif _delrec == -2:
-                                                                            raw(self, "913", self._nickname, ret)
+                                                                            raw_messages.raw(self, "913", self._nickname, ret)
                                                                 else:
-                                                                    raw(self, "903", self._nickname, ret)
+                                                                    raw_messages.raw(self, "903", self._nickname, ret)
 
                                                         elif param[2].upper() == "CLEAR":  # access # clear [deny]
                                                             if len(param) > 3:
                                                                 if param[3].upper() != "DENY" and param[
                                                                     3].upper() != "GRANT":
-                                                                    raw(self, "900", self._nickname, param[3])
+                                                                    raw_messages.raw(self, "900", self._nickname, param[3])
                                                                 else:
                                                                     _Access.ClearRecords(ret, self, param[3].upper())
                                                                     if ret == "*":
@@ -4603,7 +4065,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                 WriteUsers(False, False, True)
 
                                                         elif param[2].upper() == "LIST":
-                                                            raw(self, "803", self._nickname, ret)
+                                                            raw_messages.raw(self, "803", self._nickname, ret)
                                                             for each in _list:
                                                                 if each._deleteafterexpire == False:
                                                                     exp = 0
@@ -4615,111 +4077,111 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                 stringinf = "%s %s %s %d %s %s" % (
                                                                     ret, each._level, each._mask, exp, each._setby,
                                                                     each._reason)
-                                                                raw(self, "804", self._nickname, stringinf)
+                                                                raw_messages.raw(self, "804", self._nickname, stringinf)
 
-                                                            raw(self, "805", self._nickname, ret)
+                                                            raw_messages.raw(self, "805", self._nickname, ret)
                                                         else:
-                                                            raw(self, "900", self._nickname, ret)
+                                                            raw_messages.raw(self, "900", self._nickname, ret)
                                                     except:
-                                                        raw(self, "903", self._nickname, ret)
+                                                        raw_messages.raw(self, "903", self._nickname, ret)
                                         else:
-                                            raw(self, "913", self._nickname, ret)
+                                            raw_messages.raw(self, "913", self._nickname, ret)
 
                                     elif cid:
-                                        raw(self, "925", self._nickname, param[1])
+                                        raw_messages.raw(self, "925", self._nickname, param[1])
 
                                     else:
-                                        raw(self, "924", self._nickname, param[1])
+                                        raw_messages.raw(self, "924", self._nickname, param[1])
 
                                 elif param[0] == "PROP":
                                     if len(param) > 2:
                                         if chanid:
                                             if chanid.MODE_noircx and self._nickname.lower() not in operator_entries:
-                                                raw(self, "997", self._nickname, chanid.channelname, param[1])
+                                                raw_messages.raw(self, "997", self._nickname, chanid.channelname, param[1])
 
                                             elif param[2].upper() == "*":
                                                 if isSecret(chanid,
                                                             "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                    raw(self, "818", self._nickname, "%s OID :0" % (chanid.channelname))
-                                                    raw(self, "818", self._nickname, "%s Name :%s" %
+                                                    raw_messages.raw(self, "818", self._nickname, "%s OID :0" % (chanid.channelname))
+                                                    raw_messages.raw(self, "818", self._nickname, "%s Name :%s" %
                                                         (chanid.channelname, chanid.channelname))
 
                                                     if self._nickname.lower() in operator_entries:
                                                         if chanid._prop.account:
-                                                            raw(self, "818", self._nickname,
+                                                            raw_messages.raw(self, "818", self._nickname,
                                                                 "%s Account :%s!%s@%s (%s)" % (
                                                                     chanid.channelname, chanid._prop.account_name,
                                                                     chanid._prop.account_user,
                                                                     chanid._prop.account_hostmask,
                                                                     chanid._prop.account_address))
                                                         else:
-                                                            raw(self, "818", self._nickname, "%s Account :%s" %
-                                                                (chanid.channelname, ServerName))
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Account :%s" %
+                                                                (chanid.channelname, server_name))
 
                                                     if self._nickname.lower() in operator_entries and chanid.MODE_registered:
-                                                        raw(self, "818", self._nickname, "%s Registered :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Registered :%s" %
                                                             (chanid.channelname, chanid._prop.registered))
 
-                                                    raw(self, "818", self._nickname, "%s Creation :%s" %
+                                                    raw_messages.raw(self, "818", self._nickname, "%s Creation :%s" %
                                                         (chanid.channelname, chanid._prop.creation))
                                                     if chanid._prop.ownerkey != "" and self._nickname.lower() in chanid._owner or self._nickname.lower() in operator_entries and chanid._prop.ownerkey != "":
-                                                        raw(self, "818", self._nickname, "%s Ownerkey :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Ownerkey :%s" %
                                                             (chanid.channelname, chanid._prop.ownerkey))
                                                     if chanid._prop.hostkey != "" and self._nickname.lower() in chanid._owner or self._nickname.lower() in operator_entries and chanid._prop.hostkey != "":
-                                                        raw(self, "818", self._nickname, "%s Hostkey :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Hostkey :%s" %
                                                             (chanid.channelname, chanid._prop.hostkey))
                                                     if chanid.MODE_key != "" and self._nickname.lower() in chanid._users:
-                                                        raw(self, "818", self._nickname, "%s Memberkey :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Memberkey :%s" %
                                                             (chanid.channelname, chanid.MODE_key))
 
                                                     if chanid._prop.reset != 0:
-                                                        raw(self, "818", self._nickname, "%s Reset :%d" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Reset :%d" %
                                                             (chanid.channelname, chanid._prop.reset))
 
                                                     if chanid._prop.language != "":
-                                                        raw(self, "818", self._nickname, "%s Language :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Language :%s" %
                                                             (chanid.channelname, chanid._prop.language))
 
                                                     if chanid._topic != "":
                                                         if chanid._topic[0] == ":":
-                                                            raw(self, "818", self._nickname, "%s Topic %s" %
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Topic %s" %
                                                                 (chanid.channelname, chanid._topic))
                                                         else:
-                                                            raw(self, "818", self._nickname, "%s Topic :%s" %
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Topic :%s" %
                                                                 (chanid.channelname, chanid._topic))
                                                     if chanid._prop.client != "":
-                                                        raw(self, "818", self._nickname, "%s Client :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Client :%s" %
                                                             (chanid.channelname, chanid._prop.client))
                                                     if chanid._prop.lag != "" and myint(chanid._prop.lag) != 0:
-                                                        raw(self, "818", self._nickname, "%s Lag :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Lag :%s" %
                                                             (chanid.channelname, chanid._prop.lag))
                                                     if chanid._prop.onjoin != "":
-                                                        raw(self, "818", self._nickname, "%s Onjoin :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Onjoin :%s" %
                                                             (chanid.channelname, chanid._prop.onjoin))
                                                     if chanid._prop.onpart != "":
-                                                        raw(self, "818", self._nickname, "%s Onpart :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Onpart :%s" %
                                                             (chanid.channelname, chanid._prop.onpart))
                                                     if chanid._prop.subject != "":
-                                                        raw(self, "818", self._nickname, "%s Subject :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Subject :%s" %
                                                             (chanid.channelname, chanid._prop.subject))
 
-                                                raw(self, "819", self._nickname, chanid.channelname)
+                                                raw_messages.raw(self, "819", self._nickname, chanid.channelname)
 
                                             # add elif for if prop is disabled for owners
 
                                             elif chanid.MODE_ownersetprop and self._nickname.lower() not in chanid._owner and len(
                                                     param) > 3 and self._nickname.lower() not in operator_entries:
-                                                raw(self, "485", self._nickname, chanid.channelname)
+                                                raw_messages.raw(self, "485", self._nickname, chanid.channelname)
 
                                             elif param[2].upper() == "CLIENT":
                                                 if len(param) == 3:
                                                     if chanid._prop.client != "":
                                                         if isSecret(chanid,
                                                                     "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                            raw(self, "818", self._nickname, "%s Client :%s" %
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Client :%s" %
                                                                 (chanid.channelname, chanid._prop.client))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
                                                     chanid._prop._client(chanid, self, param[3])
 
@@ -4728,10 +4190,10 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     if chanid._prop.subject != "":
                                                         if isSecret(chanid,
                                                                     "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                            raw(self, "818", self._nickname, "%s Subject :%s" %
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Subject :%s" %
                                                                 (chanid.channelname, chanid._prop.subject))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
                                                     chanid._prop._subject(chanid, self, param[3])
 
@@ -4740,10 +4202,10 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     if myint(chanid._prop.lag) != 0:
                                                         if isSecret(chanid,
                                                                     "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                            raw(self, "818", self._nickname, "%s Lag :%s" %
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Lag :%s" %
                                                                 (chanid.channelname, chanid._prop.lag))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
                                                     chanid._prop._lag(chanid, self, param[3])
 
@@ -4752,10 +4214,10 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     if chanid._prop.language != "":
                                                         if isSecret(chanid,
                                                                     "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                            raw(self, "818", self._nickname, "%s Language :%s" %
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Language :%s" %
                                                                 (chanid.channelname, chanid._prop.language))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
                                                     chanid._prop._language(chanid, self, param[3])
 
@@ -4763,36 +4225,36 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if len(param) == 3:
                                                     if self._nickname.lower() in operator_entries:
                                                         if chanid._prop.account:
-                                                            raw(self, "818", self._nickname,
+                                                            raw_messages.raw(self, "818", self._nickname,
                                                                 "%s Account :%s!%s@%s (%s)" % (
                                                                     chanid.channelname, chanid._prop.account_name,
                                                                     chanid._prop.account_user,
                                                                     chanid._prop.account_hostmask,
                                                                     chanid._prop.account_address))
                                                         else:
-                                                            raw(self, "818", self._nickname, "%s Account :%s" %
-                                                                (chanid.channelname, ServerName))
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Account :%s" %
+                                                                (chanid.channelname, server_name))
 
-                                                        raw(self, "819", self._nickname, chanid.channelname)
+                                                        raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                     else:
-                                                        raw(self, "908", self._nickname)
+                                                        raw_messages.raw(self, "908", self._nickname)
                                                 else:
-                                                    raw(self, "908", self._nickname)
+                                                    raw_messages.raw(self, "908", self._nickname)
 
                                             elif param[2].upper() == "TOPIC":
                                                 if len(param) == 3:
                                                     if isSecret(chanid,
                                                                 "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
                                                         if chanid._topic != "":
-                                                            raw(self, "332", self._nickname,
+                                                            raw_messages.raw(self, "332", self._nickname,
                                                                 chanid.channelname, chanid._topic)
-                                                            raw(self, "333", self._nickname, chanid.channelname,
+                                                            raw_messages.raw(self, "333", self._nickname, chanid.channelname,
                                                                 chanid._topic_nick, chanid._topic_time)
 
                                                         else:
-                                                            raw(self, "331", self._nickname, chanid.channelname)
+                                                            raw_messages.raw(self, "331", self._nickname, chanid.channelname)
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
                                                     chanid._prop._topic(
                                                         chanid, self, param[3],
@@ -4801,10 +4263,10 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                             elif param[2].upper() == "MEMBERKEY":
                                                 if len(param) == 3:
                                                     if self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                        raw(self, "818", self._nickname, "%s Memberkey :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Memberkey :%s" %
                                                             (chanid.channelname, chanid.MODE_key))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
                                                     chanid._prop._memberkey(chanid, self, param[3])
 
@@ -4812,11 +4274,11 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if len(param) == 3:
                                                     if chanid._prop.hostkey != "":
                                                         if self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._owner:
-                                                            raw(self, "818", self._nickname, "%s Hostkey :%s" %
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Hostkey :%s" %
                                                                 (chanid.channelname, chanid._prop.hostkey))
-                                                            raw(self, "819", self._nickname, chanid.channelname)
+                                                            raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                         else:
-                                                            raw(self, "908", self._nickname)
+                                                            raw_messages.raw(self, "908", self._nickname)
                                                             pass
                                                 else:
                                                     chanid._prop._hostkey(chanid, self, param[3])
@@ -4825,11 +4287,11 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if len(param) == 3:
                                                     if chanid._prop.ownerkey != "":
                                                         if self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._owner:
-                                                            raw(self, "818", self._nickname, "%s Ownerkey :%s" %
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Ownerkey :%s" %
                                                                 (chanid.channelname, chanid._prop.ownerkey))
-                                                            raw(self, "819", self._nickname, chanid.channelname)
+                                                            raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                         else:
-                                                            raw(self, "908", self._nickname)
+                                                            raw_messages.raw(self, "908", self._nickname)
                                                             pass
                                                 else:
                                                     chanid._prop._ownerkey(chanid, self, param[3])
@@ -4837,21 +4299,21 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                             elif param[2].upper() == "REGISTERED":
                                                 if len(param) == 3:
                                                     if self._nickname.lower() in operator_entries:
-                                                        raw(self, "818", self._nickname, "%s Registered :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Registered :%s" %
                                                             (chanid.channelname, chanid._prop.registered))
                                                     else:
-                                                        raw(self, "908", self._nickname)
+                                                        raw_messages.raw(self, "908", self._nickname)
                                                 else:
-                                                    raw(self, "908", self._nickname)
+                                                    raw_messages.raw(self, "908", self._nickname)
 
                                             elif param[2].upper() == "NAME":
                                                 if len(param) == 3:
                                                     if isSecret(chanid,
                                                                 "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                        raw(self, "818", self._nickname, "%s Name :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Name :%s" %
                                                             (chanid.channelname, chanid.channelname))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
                                                     chanid._prop._name(chanid, self, param[3])
 
@@ -4859,10 +4321,10 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if len(param) == 3:
                                                     if isSecret(chanid,
                                                                 "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                        raw(self, "818", self._nickname, "%s Reset :%d" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Reset :%d" %
                                                             (chanid.channelname, chanid._prop.reset))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
                                                     chanid._prop._reset(chanid, self, param[3])
 
@@ -4870,33 +4332,33 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if len(param) == 3:
                                                     if isSecret(chanid,
                                                                 "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                        raw(self, "818", self._nickname, "%s OID :0" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s OID :0" %
                                                             (chanid.channelname))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
-                                                    raw(self, "908", self._nickname)
+                                                    raw_messages.raw(self, "908", self._nickname)
 
                                             elif param[2].upper() == "CREATION":
                                                 if len(param) == 3:
                                                     if isSecret(chanid,
                                                                 "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                        raw(self, "818", self._nickname, "%s Creation :%s" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s Creation :%s" %
                                                             (chanid.channelname, chanid._prop.creation))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
-                                                    raw(self, "908", self._nickname)
+                                                    raw_messages.raw(self, "908", self._nickname)
 
                                             elif param[2].upper() == "ONJOIN":
                                                 if len(param) == 3:
                                                     if chanid._prop.onjoin != "":
                                                         if isSecret(chanid,
                                                                     "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                            raw(self, "818", self._nickname, "%s Onjoin :%s" %
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Onjoin :%s" %
                                                                 (chanid.channelname, chanid._prop.onjoin))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
                                                     chanid._prop._onmessage(
                                                         chanid, self, param[3],
@@ -4908,10 +4370,10 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     if chanid._prop.onpart != "":
                                                         if isSecret(chanid,
                                                                     "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                            raw(self, "818", self._nickname, "%s Onpart :%s" %
+                                                            raw_messages.raw(self, "818", self._nickname, "%s Onpart :%s" %
                                                                 (chanid.channelname, chanid._prop.onpart))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
                                                     chanid._prop._onmessage(
                                                         chanid, self, param[3],
@@ -4922,19 +4384,19 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if len(param) == 3:
                                                     if isSecret(chanid,
                                                                 "private") == False or self._nickname.lower() in operator_entries or self._nickname.lower() in chanid._users:
-                                                        raw(self, "818", self._nickname, "%s PICS :0" %
+                                                        raw_messages.raw(self, "818", self._nickname, "%s PICS :0" %
                                                             (chanid.channelname))
 
-                                                    raw(self, "819", self._nickname, chanid.channelname)
+                                                    raw_messages.raw(self, "819", self._nickname, chanid.channelname)
                                                 else:
-                                                    raw(self, "908", self._nickname)
+                                                    raw_messages.raw(self, "908", self._nickname)
 
                                             else:
-                                                raw(self, "905", self._nickname, chanid.channelname)
+                                                raw_messages.raw(self, "905", self._nickname, chanid.channelname)
                                         else:
-                                            raw(self, "403", self._nickname, param[1])
+                                            raw_messages.raw(self, "403", self._nickname, param[1])
                                     else:
-                                        raw(self, "461", self._nickname, param[0])
+                                        raw_messages.raw(self, "461", self._nickname, param[0])
 
                                 elif param[0] == "IDENTIFY":
                                     if chanid:
@@ -4983,26 +4445,26 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                                               self._nickname))
 
                                             else:
-                                                raw(self, "908", self._nickname)
+                                                raw_messages.raw(self, "908", self._nickname)
                                         else:
-                                            raw(self, "442", self._nickname, chanid.channelname)
+                                            raw_messages.raw(self, "442", self._nickname, chanid.channelname)
                                     else:
-                                        raw(self, "403", self._nickname, param[1])
+                                        raw_messages.raw(self, "403", self._nickname, param[1])
 
                                 elif param[0] == "AWAY":  # note : add to WHO, send to all on channel once
                                     try:
                                         if len(param) == 1:
-                                            raw(self, "305", self._nickname)
+                                            raw_messages.raw(self, "305", self._nickname)
                                             self._away = ""
 
                                         else:
                                             if strdata.split(" ", 1)[1].__len__() > 128:
-                                                raw(self, "906", self._nickname, param[0])
+                                                raw_messages.raw(self, "906", self._nickname, param[0])
                                             else:
                                                 self._away = param[1]
                                                 if self._away[0] == ":":
                                                     self._away = strdata.split(" ", 1)[1][1:]
-                                                raw(self, "306", self._nickname)
+                                                raw_messages.raw(self, "306", self._nickname)
 
                                     except:
                                         pass
@@ -5029,7 +4491,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                             cid = nickname_to_client_mapping_entries[_kicknick]
 
                                                             if cid._nickname.lower() in operator_entries and self._nickname.lower() not in operator_entries:
-                                                                raw(self, "481", self._nickname,
+                                                                raw_messages.raw(self, "481", self._nickname,
                                                                     "Permission Denied - You're not a System operator")
                                                             elif cid._nickname.lower() in operator_entries and self._nickname.lower() in operator_entries:
                                                                 opid = operator_entries[self._nickname.lower()]
@@ -5037,13 +4499,13 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                 if opid.operator_level >= sopid.operator_level:
                                                                     chanid.kick(self, cid._nickname, kickmsg)
                                                                 else:
-                                                                    raw(self, "481", self._nickname,
+                                                                    raw_messages.raw(self, "481", self._nickname,
                                                                         "Permission Denied - Insufficient oper priviledges")
                                                                 # opers can kick other opers but they have to be equal levels or higher
                                                             else:
                                                                 if self._nickname.lower() in chanid._op:
                                                                     if cid._nickname.lower() in chanid._owner or chanid.MODE_ownerkick:
-                                                                        raw(self, "485", self._nickname,
+                                                                        raw_messages.raw(self, "485", self._nickname,
                                                                             chanid.channelname)
                                                                     else:
                                                                         chanid.kick(self, cid._nickname, kickmsg)
@@ -5052,35 +4514,35 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                     chanid.kick(self, cid._nickname, kickmsg)
                                                                 else:
                                                                     if cid._nickname.lower() in chanid._owner:
-                                                                        raw(self, "485", self._nickname,
+                                                                        raw_messages.raw(self, "485", self._nickname,
                                                                             chanid.channelname)
                                                                     else:
-                                                                        raw(self, "482", self._nickname,
+                                                                        raw_messages.raw(self, "482", self._nickname,
                                                                             chanid.channelname)
                                                         else:
-                                                            raw(self, "906", self._nickname, chanid.channelname)
+                                                            raw_messages.raw(self, "906", self._nickname, chanid.channelname)
                                                     else:
-                                                        raw(self, "441", self._nickname, chanid.channelname)
+                                                        raw_messages.raw(self, "441", self._nickname, chanid.channelname)
                                                 else:
-                                                    raw(self, "401", self._nickname, param[2])
+                                                    raw_messages.raw(self, "401", self._nickname, param[2])
 
                                                 iloop += 1
                                         else:
-                                            raw(self, "442", self._nickname, chanid.channelname)
+                                            raw_messages.raw(self, "442", self._nickname, chanid.channelname)
                                     else:
-                                        raw(self, "403", self._nickname, param[1])
+                                        raw_messages.raw(self, "403", self._nickname, param[1])
 
                                 elif param[0] == "CREATE":
                                     _sleep = "%.4f" % (random() / 9)
 
                                     if param[1].lower() in channel_entries:
-                                        raw(self, "705", self._nickname, param[1])
+                                        raw_messages.raw(self, "705", self._nickname, param[1])
                                     else:
                                         if len(self._channels) >= myint(MaxChannelsPerUser):
-                                            raw(self, "405", self._nickname, param[1])
+                                            raw_messages.raw(self, "405", self._nickname, param[1])
                                         else:
                                             if len(channel_entries) >= myint(MaxChannels):
-                                                raw(self, "710", self._nickname)
+                                                raw_messages.raw(self, "710", self._nickname, MaxChannels)
                                             else:
                                                 if len(param) == 2:
                                                     creationmodes = "0"
@@ -5108,7 +4570,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                                     del createmute[param[1].lower()]
                                                 else:
-                                                    raw(self, "705", self._nickname, param[1])
+                                                    raw_messages.raw(self, "705", self._nickname, param[1])
 
                                 elif param[0] == "JOIN":
                                     _sleep = "%.4f" % (random() / 9)
@@ -5116,7 +4578,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                     iloop = 0
                                     while iloop < len(param[1].split(",")):
                                         if len(self._channels) >= myint(MaxChannelsPerUser):
-                                            raw(self, "405", self._nickname, param[1].split(",")[iloop])
+                                            raw_messages.raw(self, "405", self._nickname, param[1].split(",")[iloop])
                                         else:
 
                                             chanclass = getChannelOBJ(param[1].split(",")[iloop].lower())
@@ -5139,7 +4601,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                                         else:
                                                             # send error to  user
-                                                            raw(self, "475", self._nickname, chanclass.channelname)
+                                                            raw_messages.raw(self, "475", self._nickname, chanclass.channelname)
                                                             if chanclass.MODE_knock:
                                                                 for each in chanclass._users:  # need to check for knock mode
                                                                     cclientid = getUserOBJ(each)
@@ -5153,7 +4615,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                                     else:
                                                         # send error to  user
-                                                        raw(self, "475", self._nickname, chanclass.channelname)
+                                                        raw_messages.raw(self, "475", self._nickname, chanclass.channelname)
                                                         if chanclass.MODE_knock:
                                                             for each in chanclass._users:  # need to check for knock mode
                                                                 cclientid = getUserOBJ(each)
@@ -5175,10 +4637,10 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     chanclass.join(self._nickname)
                                             else:
                                                 if len(channel_entries) >= myint(MaxChannels):
-                                                    raw(self, "710", self._nickname)
+                                                    raw_messages.raw(self, "710", self._nickname, MaxChannels)
 
                                                 elif ChanLockDown == 1:
-                                                    raw(self, "702", self._nickname)
+                                                    raw_messages.raw(self, "702", self._nickname)
                                                 else:
 
                                                     if param[1].lower() not in createmute:
@@ -5199,9 +4661,9 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                 elif param[0] == "FINDS":
                                     if chanid:
-                                        raw(self, "613", self._nickname, chanid.channelname, "")
+                                        raw_messages.raw(self, "613", self._nickname, chanid.channelname, "")
                                     else:
-                                        raw(self, "702", self._nickname, param[1])
+                                        raw_messages.raw(self, "702", self._nickname, param[1])
 
                                 elif param[0] == "ISON":
                                     ison_nicknames = ""
@@ -5214,14 +4676,14 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                         iloop += 1
 
-                                    raw(self, "303", self._nickname, ison_nicknames[1:])
+                                    raw_messages.raw(self, "303", self._nickname, ison_nicknames[1:])
 
                                 elif param[0] == "USERHOST" or param[0] == "USERIP":
                                     iloop = 1
                                     while iloop < len(strdata.split(" ")):
                                         t_nick = strdata.split(" ")[iloop].lower()
                                         if self._nickname.lower() == t_nick:
-                                            raw(self, "302", self._nickname, self, True)
+                                            raw_messages.raw(self, "302", self._nickname, self, True)
                                         else:
                                             cid = getUserOBJ(t_nick)
                                             if cid:
@@ -5235,21 +4697,21 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     if opid.operator_level > topid:
                                                         boolShowIP = True
 
-                                                raw(self, "302", self._nickname, nickname_to_client_mapping_entries[t_nick], boolShowIP)
+                                                raw_messages.raw(self, "302", self._nickname, nickname_to_client_mapping_entries[t_nick], boolShowIP)
                                             else:
-                                                self.send(":" + ServerName + " 302 " + self._nickname + " :\r\n")
+                                                self.send(":" + server_name + " 302 " + self._nickname + " :\r\n")
 
                                         iloop += 1
 
                                 elif param[0] == "CREDITS":
-                                    raw(self, "955", self._nickname)
+                                    raw_messages.raw(self, "955", self._nickname)
 
                                 elif param[0] == "TIME":
-                                    raw(self, "391", self._nickname)
+                                    raw_messages.raw(self, "391", self._nickname)
 
                                 elif param[0] == "INFO":
-                                    raw(self, "371", self._nickname, NetworkName)
-                                    raw(self, "374", self._nickname)
+                                    raw_messages.raw(self, "371", self._nickname, NetworkName)
+                                    raw_messages.raw(self, "374", self._nickname)
 
                                 elif param[0] == "GENPASS":
                                     secPass = ""
@@ -5264,7 +4726,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                     mkshapass = sha256(secPass.encode('utf-8'))
 
                                     self.send(
-                                        ":" + ServerName +
+                                        ":" + server_name +
                                         " NOTICE GENPASS :*** Your securely generated password is: %s\r\n" %
                                         (mkshapass.hexdigest()))
 
@@ -5279,7 +4741,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     _whouser = nickname_to_client_mapping_entries[each]
                                                     whostring = Whouser(_whouser, chanid.channelname.lower(), self)
                                                     if whostring != "":
-                                                        raw(self, "352", self._nickname, whostring)
+                                                        raw_messages.raw(self, "352", self._nickname, whostring)
 
                                     else:
                                         _whouser = getUserOBJ(_who)
@@ -5288,7 +4750,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     self, _whouser) or self == _whouser:
                                                 whostring = Whouser(_whouser, "", self)
                                                 if whostring != "":
-                                                    raw(self, "352", self._nickname, whostring)
+                                                    raw_messages.raw(self, "352", self._nickname, whostring)
 
                                         else:
                                             useIP = True
@@ -5302,16 +4764,16 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if tempAccessObj.MatchAccess(param[1], nickid, useIP):
                                                     who_count += 1
                                                     if who_count == 20 and self._nickname.lower() not in operator_entries:
-                                                        raw(self, "416", self._nickname, "WHO")
+                                                        raw_messages.raw(self, "416", self._nickname, "WHO")
                                                         break
 
                                                     if nickid._MODE_invisible == False or self._nickname.lower() in operator_entries or InChannel(
                                                             self, nickid) or self == nickid:
                                                         whostring = Whouser(nickid, "", self)
                                                         if whostring != "":
-                                                            raw(self, "352", self._nickname, whostring)
+                                                            raw_messages.raw(self, "352", self._nickname, whostring)
 
-                                    raw(self, "315", self._nickname, param[1])
+                                    raw_messages.raw(self, "315", self._nickname, param[1])
 
                                 elif param[0] == "KILLMASK":
                                     if opid:
@@ -5327,7 +4789,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                 if tempAccessObj.MatchAccess(param[1], nickid):
                                                     kill_count += 1
                                                     if kill_count == 5:
-                                                        raw(self, "416", self._nickname, "KILLMASK")
+                                                        raw_messages.raw(self, "416", self._nickname, "KILLMASK")
                                                         break
                                                     else:
                                                         if nickid._nickname.lower() in operator_entries:
@@ -5338,7 +4800,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                                         if nickid == self:
                                                             self.send(
-                                                                ":" + ServerName +
+                                                                ":" + server_name +
                                                                 " NOTICE KILLMASK :*** You cannot kill yourself using KILLMASK\r\n")
                                                             kill_count -= 1
                                                             continue
@@ -5353,19 +4815,19 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                         nickid.die = True
 
                                             sendAdminOpers(
-                                                ":" + ServerName + " NOTICE KILLMASK :*** " + self._nickname +
+                                                ":" + server_name + " NOTICE KILLMASK :*** " + self._nickname +
                                                 " has just used KILLMASK to kill " + str(kill_count) +
                                                 " connections with parameter \"" + param[1] + "\"\r\n")
 
                                         else:
-                                            raw(self, "481", self._nickname,
+                                            raw_messages.raw(self, "481", self._nickname,
                                                 "Permission Denied - You're not an Administrator")
                                     else:
-                                        raw(self, "481", self._nickname,
+                                        raw_messages.raw(self, "481", self._nickname,
                                             "Permission Denied - You're not a System Operator")
 
                                 elif param[0] == "LINKS":
-                                    raw(self, "365", self._nickname)
+                                    raw_messages.raw(self, "365", self._nickname)
 
                                 elif param[0] == "WHOIS":
                                     iloop = 0
@@ -5375,19 +4837,77 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         if _whoisuser:
                                             if _whoisuser._MODE_invisible == False or self._nickname.lower() in operator_entries or InChannel(
                                                     self, _whoisuser) or self == _whoisuser:
-                                                raw(self, "311", self._nickname, _whoisuser)
-                                                raw(self, "378", self._nickname, _whoisuser)
-                                                raw(self, "319", self._nickname, _whoisuser)
+                                                raw_messages.raw(self, "311", self._nickname, _whoisuser)
+
+                                                if self._nickname.lower() in operator_entries:
+                                                    xopid = 0
+                                                    opid = operator_entries[self._nickname.lower()]
+                                                    if _whoisuser._nickname.lower() in operator_entries:
+                                                        sopid = operator_entries[_whoisuser._nickname.lower()]
+                                                        xopid = sopid.operator_level
+
+                                                    if opid.operator_level >= xopid:
+                                                        raw_messages.raw(self, "378", self._nickname, _whoisuser)
+
+                                                w_channels = ""
+                                                cnick = self._nickname.lower()
+                                                cid = getUserOBJ(cnick)
+                                                for c in _whoisuser._channels:
+
+                                                    if len(w_channels.split(" ")) == 10:
+                                                        raw_messages.raw(self, "319", self._nickname, _whoisuser, w_channels[1:])
+
+                                                        self.send(
+                                                            ":" + server_name + " 319 " + self._nickname + " " + _whoisuser._nickname + " :" + w_channels[
+                                                                                                                                  1:] + "\r\n")
+                                                        w_channels = ""
+
+                                                    chanid = getChannelOBJ(c.lower())
+                                                    if chanid:
+                                                        if isSecret(chanid, "private",
+                                                                    "hidden") != True or cnick in chanid._users or getOperOBJ(
+                                                                cnick):
+                                                            if chanid.MODE_auditorium == False or isOp(
+                                                                    cnick, chanid.channelname) or isOp(
+                                                                _whoisuser._nickname, chanid.channelname):
+
+                                                                # cid is me
+                                                                # param4 is them, param 5 is the one who should be hidden if watching channel
+
+                                                                if chanid.channelname in _whoisuser._watch and cid != _whoisuser:
+                                                                    pass
+
+                                                                elif _whoisuser._nickname.lower() in chanid._voice and _whoisuser._nickname.lower() not in chanid._op and _whoisuser._nickname.lower() not in chanid._owner:
+                                                                    w_channels = w_channels + " +" + c
+
+                                                                elif _whoisuser._nickname.lower() in chanid._op:
+                                                                    w_channels = w_channels + " @" + c
+
+                                                                elif _whoisuser._nickname.lower() in chanid._owner:
+                                                                    if cid._IRCX:
+                                                                        w_channels = w_channels + " ." + c
+                                                                    else:
+                                                                        w_channels = w_channels + " @" + c
+                                                                else:
+                                                                    w_channels = w_channels + " " + c
+
+                                                if w_channels[1:] != "":
+                                                    raw_messages.raw(self, "319", self._nickname, _whoisuser, w_channels[1:])
+
                                                 if _whoisuser._MODE_register:
-                                                    raw(self, "307", self._nickname, _whoisuser)
+                                                    raw_messages.raw(self, "307", self._nickname, _whoisuser)
                                                 if "z" in _whoisuser._MODE_:
-                                                    raw(self, "316", self._nickname, _whoisuser._nickname)
-                                                raw(self, "313", self._nickname, _whoisuser)
-                                                raw(self, "320", self._nickname, _whoisuser)
-                                                raw(self, "312", self._nickname, _whoisuser)
+                                                    raw_messages.raw(self, "316", self._nickname, _whoisuser._nickname)
+
+                                                raw_messages.raw(self, "313", self._nickname, _whoisuser, _whoisuser._MODE_)
+                                                raw_messages.raw(self, "320", self._nickname, _whoisuser)
+                                                raw_messages.raw(self, "312", self._nickname, _whoisuser, NetworkName)
                                                 if _whoisuser._away != "":
-                                                    raw(self, "301", self._nickname, _whoisuser, _whoisuser._away)
-                                                raw(self, "317", self._nickname, _whoisuser)
+                                                    raw_messages.raw(self, "301", self._nickname, _whoisuser, _whoisuser._away)
+
+                                                # TODO simplify all of this but simplify raws at the same time
+                                                if _whoisuser._MODE_invisible != True or self._nickname in operator_entries:
+                                                    raw_messages.raw(self, "317", self._nickname, _whoisuser)
 
                                         elif _whois.lower() == "nickserv":
                                             self.send(
@@ -5397,19 +4917,19 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     "NOTICE", self._nickname))
 
                                         else:
-                                            raw(self, "401", self._nickname, _whois)
+                                            raw_messages.raw(self, "401", self._nickname, _whois)
 
                                         iloop += 1
 
-                                    raw(self, "318", self._nickname, param[1])
+                                    raw_messages.raw(self, "318", self._nickname, param[1])
 
                                 elif param[0] == "ADMIN":
-                                    raw(self, "258", self._nickname, ServerAdmin1)
-                                    raw(self, "259", self._nickname, ServerAdmin2)
+                                    raw_messages.raw(self, "258", self._nickname, ServerAdmin1)
+                                    raw_messages.raw(self, "259", self._nickname, ServerAdmin2)
 
                                 elif param[0] == "VERSION":
-                                    raw(self, "256", self._nickname)
-                                    raw(self, "257", self._nickname)
+                                    raw_messages.raw(self, "256", self._nickname, NetworkName)
+                                    raw_messages.raw(self, "257", self._nickname)
 
                                 elif param[0] == "LUSERS":
                                     self._sendlusers()
@@ -5422,7 +4942,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                 elif param[0] == "DATA" or param[0] == "REPLY" or param[0] == "REQUEST":
                                     if self._MODE_gag:
-                                        raw(self, "908", self._nickname)
+                                        raw_messages.raw(self, "908", self._nickname)
                                     else:
                                         recips = []
                                         tag = param[2]
@@ -5430,7 +4950,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                         if data[0] == ":":
                                             data = strdata.split(" ", 3)[3][1:]
                                         if data == "":
-                                            raw(self, "412", self._nickname, param[0])
+                                            raw_messages.raw(self, "412", self._nickname, param[0])
                                         else:
                                             iloop = 0
                                             while iloop < len(param[1].split(",")):
@@ -5449,7 +4969,7 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                     elif _recipient in channel_entries:
                                                         chan = channel_entries[_recipient]
                                                         if chan.isBanned(self) and chan.MODE_gagonban:
-                                                            raw(self, "404", self._nickname, _recipient,
+                                                            raw_messages.raw(self, "404", self._nickname, _recipient,
                                                                 "Cannot send to channel whilst banned")
                                                         else:
                                                             if self._nickname.lower() in chan._users or chan.MODE_externalmessages == False:
@@ -5464,11 +4984,11 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                                                                                       self._hostmask, param[0],
                                                                                       _recipient, tag, data))
                                                             else:
-                                                                raw(self, "404", self._nickname,
+                                                                raw_messages.raw(self, "404", self._nickname,
                                                                     _recipient, "Cannot send to channel")
 
                                                     else:
-                                                        raw(self, "401", self._nickname, _recipient)
+                                                        raw_messages.raw(self, "401", self._nickname, _recipient)
 
                                                 iloop += 1
 
@@ -5477,15 +4997,15 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
                                 else:
                                     if self._nickname == "":
-                                        raw(self, "421", "*", param[0])
+                                        raw_messages.raw(self, "421", "*", param[0])
                                     else:
-                                        raw(self, "421", self._nickname, param[0])
+                                        raw_messages.raw(self, "421", self._nickname, param[0])
 
                             else:
-                                raw(self, "451", self._nickname)
+                                raw_messages.raw(self, "451", self._nickname)
 
                     except IndexError:
-                        raw(self, "461", self._nickname, param[0])
+                        raw_messages.raw(self, "461", self._nickname, param[0])
 
                     # except:
                     # tuError = sys.exc_info()
@@ -5574,12 +5094,12 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
                             if opid.watchbans:
                                 cid.send(
                                     ":%s NOTICE %s :*** Notice -- User tried connecting but is banned (%s!%s@%s) [%s] \r\n" % (
-                                        ServerName, cid._nickname, self._nickname, self._username, self._hostmask,
+                                        server_name, cid._nickname, self._nickname, self._username, self._hostmask,
                                         self.details[0]))
                         else:
                             if self._nickname != "" and opid.watchserver and quit != "":
                                 cid.send(":%s NOTICE %s :*** Notice -- User Disconnected (%s!%s@%s) [%s] (%s)\r\n" % (
-                                    ServerName, cid._nickname, self._nickname, self._username, self._hostmask,
+                                    server_name, cid._nickname, self._nickname, self._username, self._hostmask,
                                     self.details[0], quit))
                     except:
                         pass
@@ -5630,13 +5150,13 @@ class ClientConnecting(threading.Thread, ClientBaseClass):
 
 def Oper_function(self, param):
     if self._nickname.lower() in operator_entries:
-        raw(self, "381", self._nickname, "You are already logged in")
+        raw_messages.raw(self, "381", self._nickname, "You are already logged in")
     else:
         if str(len(param)) != str(3):
-            raw(self, "461", self._nickname, param[0])
+            raw_messages.raw(self, "461", self._nickname, param[0])
         else:
             if globals()["Noop"]:
-                self.send(":" + ServerName + " NOTICE SERVER :*** OPER has been disabled\r\n")
+                self.send(":" + server_name + " NOTICE SERVER :*** OPER has been disabled\r\n")
             else:
                 _login = False
                 for k in operlines:
@@ -5673,22 +5193,22 @@ def Oper_function(self, param):
                         if "A" not in self._MODE_:
                             self._MODE_ = self._MODE_ + "aAoO"
                         opid.operator_level = 4
-                        raw(self, "381", self._nickname, "You are now a Network Administrator")
+                        raw_messages.raw(self, "381", self._nickname, "You are now a Network Administrator")
                     elif "O" in opid.flags:
                         if "O" not in self._MODE_:
                             self._MODE_ = self._MODE_ + "aoO"
                         opid.operator_level = 3
-                        raw(self, "381", self._nickname, "You are now an Administrator")
+                        raw_messages.raw(self, "381", self._nickname, "You are now an Administrator")
                     elif "a" in opid.flags:
                         if "a" not in self._MODE_:
                             self._MODE_ = self._MODE_ + "ao"
                         opid.operator_level = 2
-                        raw(self, "381", self._nickname, "You are now a System Chat Manager")
+                        raw_messages.raw(self, "381", self._nickname, "You are now a System Chat Manager")
                     elif "o" in opid.flags:
                         if "o" not in self._MODE_:
                             self._MODE_ = self._MODE_ + "o"
                         opid.operator_level = 1
-                        raw(self, "381", self._nickname, "You are now a System Operator")
+                        raw_messages.raw(self, "381", self._nickname, "You are now a System Operator")
 
                     if "w" in opid.flags:
                         opid.watchserver = True
@@ -5707,13 +5227,13 @@ def Oper_function(self, param):
                         (self._nickname, self._username, self._hostmask, self.details[0]))
 
                 elif _login == "inuse":
-                    raw(self, "481", self._nickname, "Permission Denied - You're login is already in use")
+                    raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're login is already in use")
                 else:
                     sendWatchOpers(
                         "Notice -- Oper attempt failed (%s!%s@%s) [%s] \r\n" %
                         (self._nickname, self._username, self._hostmask, self.details[0]))
 
-                    raw(self, "491", self._nickname, "No O-lines for your host")
+                    raw_messages.raw(self, "491", self._nickname, "No O-lines for your host")
 
 
 def Nick_function(self: ClientConnecting, param):
@@ -5757,7 +5277,7 @@ def Nick_function(self: ClientConnecting, param):
                                 break
 
                     if found_deny == True and found_grant == False:
-                        raw(self, "437", self._nickname, gagchan.channelname)
+                        raw_messages.raw(self, "437", self._nickname, gagchan.channelname)
                         return
 
             temp_nick = param[1].replace(':', '')
@@ -5793,7 +5313,7 @@ def Nick_function(self: ClientConnecting, param):
                         del sendto
                         self._nickname = temp_nick
                 else:
-                    raw(self, "433", self._nickname, param[1].replace(':', ''))
+                    raw_messages.raw(self, "433", self._nickname, param[1].replace(':', ''))
             else:
 
                 # start of nickname checks
@@ -5873,13 +5393,13 @@ def Nick_function(self: ClientConnecting, param):
                                         NetworkName, self._nickname))
 
                 else:
-                    raw(self, "433", self._nickname, temp_nick)
+                    raw_messages.raw(self, "433", self._nickname, temp_nick)
                 # end of after nickname checks
 
         else:
-            raw(self, "438", self._nickname)
+            raw_messages.raw(self, "438", self._nickname)
     else:
-        raw(self, "432", self._nickname, param[1].replace(':', ''))
+        raw_messages.raw(self, "432", self._nickname, param[1].replace(':', ''))
 
 
 def Mode_function(self, param, strdata=""):
@@ -5890,9 +5410,9 @@ def Mode_function(self, param, strdata=""):
             if len(param) == 2:
                 if isSecret(chan,
                             "private") == False or self._nickname.lower() in chan._users or self._nickname.lower() in operator_entries:
-                    raw(self, "324", self._nickname, chan.channelname, chan.GetChannelModes(self._nickname.lower()))
+                    raw_messages.raw(self, "324", self._nickname, chan.channelname, chan.GetChannelModes(self._nickname.lower()))
                 else:
-                    self.send(":" + ServerName + " 324 " + self._nickname + " " + chan.channelname + " +\r\n")
+                    self.send(":" + server_name + " 324 " + self._nickname + " " + chan.channelname + " +\r\n")
             else:
                 if self._nickname.lower() in chan._users:
                     iloop = 0
@@ -5915,11 +5435,11 @@ def Mode_function(self, param, strdata=""):
                         elif chan.MODE_nomodechanges and self._nickname.lower() not in operator_entries and param[2][
                             iloop] != "b" and param[2][iloop] != "q" and param[2][iloop] != "o" and param[2][
                             iloop] != "v":
-                            raw(self, "908", self._nickname)
+                            raw_messages.raw(self, "908", self._nickname)
 
                         elif chan.MODE_ownersetmode and self._nickname.lower() not in chan._owner and param[2][
                             iloop] != "b":
-                            raw(self, "485", self._nickname, chan.channelname)
+                            raw_messages.raw(self, "485", self._nickname, chan.channelname)
 
                         elif param[2][iloop] == "b" or param[2][iloop] == "l" or param[2][iloop] == "k" or param[2][
                             iloop] == "q" or param[2][iloop] == "o" or param[2][iloop] == "v":
@@ -5934,7 +5454,7 @@ def Mode_function(self, param, strdata=""):
                                                     self._nickname, self._username, self._hostmask, chan.channelname,
                                                     param[paramloop])
                                             else:
-                                                raw(self, "906", self._nickname, "MODE +%s" % (param[2][iloop]))
+                                                raw_messages.raw(self, "906", self._nickname, "MODE +%s" % (param[2][iloop]))
                                         else:
                                             chan.MODE_key = ""
                                             szModestr = ":%s!%s@%s MODE %s -k\r\n" % (
@@ -5953,7 +5473,7 @@ def Mode_function(self, param, strdata=""):
                                                     self._nickname, self._username, self._hostmask, chan.channelname,
                                                     param[paramloop])
                                             else:
-                                                raw(self, "906", self._nickname, "MODE +%s" % (param[2][iloop]))
+                                                raw_messages.raw(self, "906", self._nickname, "MODE +%s" % (param[2][iloop]))
                                         else:
                                             chan.MODE_limit = False
                                             szModestr = ":%s!%s@%s MODE %s -l\r\n" % (
@@ -5969,7 +5489,7 @@ def Mode_function(self, param, strdata=""):
                                             cid = nickname_to_client_mapping_entries[param[paramloop].lower()]
                                             if cid._nickname.lower() in chan._users:
                                                 if self._nickname.lower() in chan._op and cid._nickname.lower() in chan._owner and cid != self:
-                                                    raw(self, "485", self._nickname, chan.channelname)
+                                                    raw_messages.raw(self, "485", self._nickname, chan.channelname)
                                                 else:
                                                     opid = 0
                                                     copid = 0
@@ -5980,10 +5500,10 @@ def Mode_function(self, param, strdata=""):
                                                         opid = operator_entries[self._nickname.lower()]
 
                                                     if copid != 0 and opid == 0:
-                                                        raw(self, "908", self._nickname)
+                                                        raw_messages.raw(self, "908", self._nickname)
                                                     else:
                                                         if copid != 0 and opid != 0:
-                                                            if opid >= copid:
+                                                            if opid.operator_level >= copid.operator_level:
                                                                 operok = True
                                                             else:
                                                                 operok = False
@@ -6070,16 +5590,16 @@ def Mode_function(self, param, strdata=""):
                                                                     chan._op.remove(cid._nickname.lower())
 
                                             else:
-                                                raw(self, "441", self._nickname, chan.channelname)
+                                                raw_messages.raw(self, "441", self._nickname, chan.channelname)
                                         else:
-                                            raw(self, "401", self._nickname, param[paramloop])
+                                            raw_messages.raw(self, "401", self._nickname, param[paramloop])
 
                                     elif param[2][iloop] == "v":
                                         if param[paramloop].lower() in nickname_to_client_mapping_entries:
                                             cid = nickname_to_client_mapping_entries[param[paramloop].lower()]
                                             if cid._nickname.lower() in chan._users:
                                                 if self._nickname.lower() in chan._op and cid._nickname.lower() in chan._owner and SetMode == False:
-                                                    raw(self, "485", self._nickname, chan.channelname)
+                                                    raw_messages.raw(self, "485", self._nickname, chan.channelname)
                                                 else:
                                                     if SetMode:
                                                         if cid._nickname.lower() not in chan._voice:
@@ -6100,13 +5620,13 @@ def Mode_function(self, param, strdata=""):
                                                                  channelname, iif(SetMode, "+", "-"),
                                                                  cid._nickname))
                                             else:
-                                                raw(self, "441", self._nickname, chan.channelname)
+                                                raw_messages.raw(self, "441", self._nickname, chan.channelname)
                                         else:
-                                            raw(self, "401", self._nickname, param[paramloop])
+                                            raw_messages.raw(self, "401", self._nickname, param[paramloop])
 
                                     elif param[2][iloop] == "q" and self._IRCX:
                                         if chan.MODE_noircx:
-                                            raw(self, "997", self._nickname, chan.channelname,
+                                            raw_messages.raw(self, "997", self._nickname, chan.channelname,
                                                 "MODE %sq" % (iif(SetMode, "+", "-")))
                                         else:
                                             isop = False
@@ -6126,14 +5646,14 @@ def Mode_function(self, param, strdata=""):
                                                             opid = opid.operator_level
 
                                                         if copid != 0 and opid == 0:
-                                                            raw(self, "908", self._nickname)
+                                                            raw_messages.raw(self, "908", self._nickname)
                                                         else:
                                                             if copid != 0 and opid != 0:
                                                                 if opid >= copid:
                                                                     operok = True
                                                                 else:
                                                                     operok = False
-                                                                    raw(self, "908", self._nickname)
+                                                                    raw_messages.raw(self, "908", self._nickname)
 
                                                             if operok:
                                                                 if chan.MODE_auditorium:
@@ -6231,20 +5751,20 @@ def Mode_function(self, param, strdata=""):
                                                                     if cid._nickname.lower() in chan._op:
                                                                         chan._op.remove(cid._nickname.lower())
                                                     else:
-                                                        raw(self, "441", self._nickname, chan.channelname)
+                                                        raw_messages.raw(self, "441", self._nickname, chan.channelname)
                                                 else:
-                                                    raw(self, "401", self._nickname, param[paramloop])
+                                                    raw_messages.raw(self, "401", self._nickname, param[paramloop])
                                             else:
-                                                raw(self, "485", self._nickname, chan.channelname)
+                                                raw_messages.raw(self, "485", self._nickname, chan.channelname)
 
                                     elif param[2][iloop] == "b":
                                         _rec = ""
                                         if SetMode:
                                             _mask = _Access.CreateMaskString(param[paramloop].lower())
                                             if _mask == -1:
-                                                raw(self, "906", self._nickname, param[paramloop].lower())
+                                                raw_messages.raw(self, "906", self._nickname, param[paramloop].lower())
                                             elif _mask == -2:
-                                                raw(self, "909", self._nickname)
+                                                raw_messages.raw(self, "909", self._nickname)
                                             else:
                                                 tag, exp = "", 0
                                                 _rec = _Access.AddRecord(self, chan.channelname,
@@ -6252,31 +5772,31 @@ def Mode_function(self, param, strdata=""):
                                                 if _rec == 1:
                                                     stringinf = "%s %s %s %d %s %s" % (
                                                         chan.channelname, "DENY", _mask, exp, self._hostmask, tag)
-                                                    raw(self, "801", self._nickname, stringinf)
+                                                    raw_messages.raw(self, "801", self._nickname, stringinf)
 
                                                 elif _rec == -1:
-                                                    raw(self, "914", self._nickname, chan.channelname)
+                                                    raw_messages.raw(self, "914", self._nickname, chan.channelname)
 
                                                 elif _rec == -2:
-                                                    raw(self, "913", self._nickname, chan.channelname)
+                                                    raw_messages.raw(self, "913", self._nickname, chan.channelname)
                                                 else:
                                                     pass
                                         else:
                                             _mask = _Access.CreateMaskString(param[paramloop].lower())
                                             if _mask == -1:
-                                                raw(self, "906", self._nickname, param[paramloop].lower())
+                                                raw_messages.raw(self, "906", self._nickname, param[paramloop].lower())
                                             elif _mask == -2:
-                                                raw(self, "909", self._nickname)
+                                                raw_messages.raw(self, "909", self._nickname)
                                             else:
                                                 _rec = _Access.DelRecord(self, chan.channelname, "DENY", _mask)
                                                 if _rec == 1:
                                                     stringinf = "%s %s %s" % (chan.channelname, "DENY", _mask)
-                                                    raw(self, "802", self._nickname, stringinf)
+                                                    raw_messages.raw(self, "802", self._nickname, stringinf)
 
                                                 elif _rec == -1:
-                                                    raw(self, "915", self._nickname, chan.channelname)
+                                                    raw_messages.raw(self, "915", self._nickname, chan.channelname)
                                                 elif _rec == -2:
-                                                    raw(self, "913", self._nickname, chan.channelname)
+                                                    raw_messages.raw(self, "913", self._nickname, chan.channelname)
                                         if _rec == 1:
                                             for each in chan._users:
                                                 cclientid = nickname_to_client_mapping_entries[each]
@@ -6287,7 +5807,7 @@ def Mode_function(self, param, strdata=""):
                                                      _mask))
 
                                 else:
-                                    raw(self, "482", self._nickname, chan.channelname)
+                                    raw_messages.raw(self, "482", self._nickname, chan.channelname)
 
                             except IndexError:
                                 if param[2][iloop] == "b" and SetMode:
@@ -6300,17 +5820,17 @@ def Mode_function(self, param, strdata=""):
                                                 if exp < 1:
                                                     exp = 0
 
-                                            raw(self, "367", self._nickname, chan.channelname,
+                                            raw_messages.raw(self, "367", self._nickname, chan.channelname,
                                                 each._mask, each._setby, str(each._setat))
 
-                                    raw(self, "368", self._nickname, chan.channelname)
+                                    raw_messages.raw(self, "368", self._nickname, chan.channelname)
                                 else:
-                                    raw(self, "461", self._nickname, "MODE %s%s" %
+                                    raw_messages.raw(self, "461", self._nickname, "MODE %s%s" %
                                         (iif(SetMode, "+", "-"), param[2][iloop]))
 
                         elif param[2][iloop] == "X":
                             if chan.MODE_noircx:
-                                raw(self, "997", self._nickname, chan.channelname,
+                                raw_messages.raw(self, "997", self._nickname, chan.channelname,
                                     "MODE %sX" % (iif(SetMode, "+", "-")))
                             else:
                                 if self._nickname.lower() in chan._owner or Override:
@@ -6327,14 +5847,14 @@ def Mode_function(self, param, strdata=""):
                                              iif(SetMode, "+", "-"),
                                              param[2][iloop]))
                                 else:
-                                    raw(self, "485", self._nickname, chan.channelname)
+                                    raw_messages.raw(self, "485", self._nickname, chan.channelname)
 
                         elif param[2][iloop] == "Z":
-                            raw(self, "472", self._nickname, "Z")
+                            raw_messages.raw(self, "472", self._nickname, "Z")
 
                         elif param[2][iloop] == "M":
                             if chan.MODE_noircx:
-                                raw(self, "997", self._nickname, chan.channelname,
+                                raw_messages.raw(self, "997", self._nickname, chan.channelname,
                                     "MODE %sM" % (iif(SetMode, "+", "-")))
                             else:
                                 if self._nickname.lower() in chan._owner or Override:
@@ -6351,11 +5871,11 @@ def Mode_function(self, param, strdata=""):
                                              iif(SetMode, "+", "-"),
                                              param[2][iloop]))
                                 else:
-                                    raw(self, "485", self._nickname, chan.channelname)
+                                    raw_messages.raw(self, "485", self._nickname, chan.channelname)
 
                         elif param[2][iloop] == "P":
                             if chan.MODE_noircx:
-                                raw(self, "997", self._nickname, chan.channelname,
+                                raw_messages.raw(self, "997", self._nickname, chan.channelname,
                                     "MODE %sP" % (iif(SetMode, "+", "-")))
                             else:
                                 if self._nickname.lower() in chan._owner or Override:
@@ -6372,11 +5892,11 @@ def Mode_function(self, param, strdata=""):
                                              iif(SetMode, "+", "-"),
                                              param[2][iloop]))
                                 else:
-                                    raw(self, "485", self._nickname, chan.channelname)
+                                    raw_messages.raw(self, "485", self._nickname, chan.channelname)
 
                         elif param[2][iloop] == "T":
                             if chan.MODE_noircx:
-                                raw(self, "997", self._nickname, chan.channelname,
+                                raw_messages.raw(self, "997", self._nickname, chan.channelname,
                                     "MODE %sT" % (iif(SetMode, "+", "-")))
                             else:
                                 if self._nickname.lower() in chan._owner or Override:
@@ -6398,15 +5918,15 @@ def Mode_function(self, param, strdata=""):
                                              unsetother, iif(SetMode, "+", "-"),
                                              param[2][iloop]))
                                 else:
-                                    raw(self, "485", self._nickname, chan.channelname)
+                                    raw_messages.raw(self, "485", self._nickname, chan.channelname)
 
                         elif param[2][iloop] == "r" or param[2][iloop] == "x" or param[2][iloop] == "S" or param[2][
                             iloop] == "e":
-                            raw(self, "468", self._nickname, chan.channelname)
+                            raw_messages.raw(self, "468", self._nickname, chan.channelname)
 
                         elif param[2][iloop] == "Q":
                             if chan.MODE_noircx:
-                                raw(self, "997", self._nickname, chan.channelname,
+                                raw_messages.raw(self, "997", self._nickname, chan.channelname,
                                     "MODE %sQ" % (iif(SetMode, "+", "-")))
                             else:
                                 if self._nickname.lower() in chan._owner or Override:
@@ -6423,7 +5943,7 @@ def Mode_function(self, param, strdata=""):
                                              iif(SetMode, "+", "-"),
                                              param[2][iloop]))
                                 else:
-                                    raw(self, "485", self._nickname, chan.channelname)
+                                    raw_messages.raw(self, "485", self._nickname, chan.channelname)
 
                         elif param[2][iloop] == "d":
                             if self._nickname.lower() in operator_entries:
@@ -6440,7 +5960,7 @@ def Mode_function(self, param, strdata=""):
                                          iif(SetMode, "+", "-"),
                                          param[2][iloop]))
                             else:
-                                raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
+                                raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
 
                         elif param[2][iloop] == "a":
                             if self._nickname.lower() in operator_entries:
@@ -6458,7 +5978,7 @@ def Mode_function(self, param, strdata=""):
                                          iif(SetMode, "+", "-"),
                                          param[2][iloop]))
                             else:
-                                raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
+                                raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
 
                         elif param[2][iloop] == "N":  # Service channel
                             if self._nickname.lower() in operator_entries:
@@ -6476,7 +5996,7 @@ def Mode_function(self, param, strdata=""):
                                          iif(SetMode, "+", "-"),
                                          param[2][iloop]))
                             else:
-                                raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
+                                raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
 
                         elif param[2][iloop] == "A":  # Service channel
                             if self._nickname.lower() in operator_entries:
@@ -6495,9 +6015,9 @@ def Mode_function(self, param, strdata=""):
                                              iif(SetMode, "+", "-"),
                                              param[2][iloop]))
                                 else:
-                                    raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
+                                    raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
                             else:
-                                raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
+                                raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
                         else:
                             if self._nickname.lower() in chan._op or self._nickname.lower() in chan._owner or Override:
                                 if param[2][iloop] == "c":
@@ -6532,7 +6052,7 @@ def Mode_function(self, param, strdata=""):
 
                                 elif param[2][iloop] == "e":
                                     if SetMode:
-                                        raw(self, "472", self._nickname, "e")
+                                        raw_messages.raw(self, "472", self._nickname, "e")
 
                                 elif param[2][iloop] == "f":
                                     if SetMode:
@@ -6585,7 +6105,7 @@ def Mode_function(self, param, strdata=""):
 
                                 elif param[2][iloop] == "I":
                                     if SetMode:
-                                        raw(self, "472", self._nickname, "I")
+                                        raw_messages.raw(self, "472", self._nickname, "I")
 
                                 elif param[2][iloop] == "K":
                                     if SetMode:
@@ -6677,7 +6197,7 @@ def Mode_function(self, param, strdata=""):
                                                 chan.MODE_ownertopic = False
                                             else:
                                                 oTopic = False
-                                                raw(self, "485", self._nickname, chan.channelname)
+                                                raw_messages.raw(self, "485", self._nickname, chan.channelname)
 
                                         chan.MODE_optopic = True
                                     else:
@@ -6715,23 +6235,23 @@ def Mode_function(self, param, strdata=""):
                                         cclientid.send(szModestr)
 
                             else:
-                                raw(self, "482", self._nickname, chan.channelname)
+                                raw_messages.raw(self, "482", self._nickname, chan.channelname)
 
                             if szModestr == "":
-                                raw(self, "501", self._nickname)
+                                raw_messages.raw(self, "501", self._nickname)
 
                         iloop += 1
 
                     time.sleep(0.3)
                 else:
-                    raw(self, "442", self._nickname, chan.channelname)
+                    raw_messages.raw(self, "442", self._nickname, chan.channelname)
         else:
-            raw(self, "403", self._nickname, param[1])
+            raw_messages.raw(self, "403", self._nickname, param[1])
 
     elif param[1].lower() == self._nickname.lower():
 
         if len(param) == 2:
-            raw(self, "221", self._nickname, self._MODE_)
+            raw_messages.raw(self, "221", self._nickname, self._MODE_)
         else:
             iloop = 0
             param[2] = compilemodestr(param[2])
@@ -6814,7 +6334,7 @@ def Mode_function(self, param, strdata=""):
                                                               param[2][iloop]))
 
                 elif param[2][iloop] == "z":
-                    raw(self, "908", self._nickname)
+                    raw_messages.raw(self, "908", self._nickname)
 
                 elif param[2][iloop] == "I":
                     if SetMode:
@@ -6830,7 +6350,7 @@ def Mode_function(self, param, strdata=""):
                                                               param[2][iloop]))
 
                 elif param[2][iloop] == "z":
-                    raw(self, "908", self._nickname)
+                    raw_messages.raw(self, "908", self._nickname)
 
                 elif param[2][iloop] == "h":  # MODE <nick> +h <pass>
                     if len(param) >= 4:
@@ -6887,9 +6407,9 @@ def Mode_function(self, param, strdata=""):
                                                                                      self._nickname))
 
                             if identify == False:
-                                raw(self, "908", self._nickname)
+                                raw_messages.raw(self, "908", self._nickname)
                     else:
-                        raw(self, "461", self._nickname, "MODE +h")
+                        raw_messages.raw(self, "461", self._nickname, "MODE +h")
 
                 elif param[2][iloop] == "g":
                     if self._nickname.lower() in operator_entries:
@@ -6908,7 +6428,7 @@ def Mode_function(self, param, strdata=""):
                                                                   self._hostmask, self._nickname,
                                                                   iif(SetMode, "+", "-"), param[2][iloop]))
                     else:
-                        raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
+                        raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
 
                 elif param[2][iloop] == "X":
                     if self._nickname.lower() in operator_entries:
@@ -6924,7 +6444,7 @@ def Mode_function(self, param, strdata=""):
                                                                   self._hostmask, self._nickname,
                                                                   iif(SetMode, "+", "-"), param[2][iloop]))
                     else:
-                        raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
+                        raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
 
                 elif param[2][iloop] == "w":
                     if self._nickname.lower() in operator_entries:
@@ -6944,9 +6464,9 @@ def Mode_function(self, param, strdata=""):
                                     SetMode, "+", "-"),
                                  param[2][iloop]))
                         else:
-                            raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
+                            raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
                     else:
-                        raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
+                        raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
 
                 elif param[2][iloop] == "b":
                     if self._nickname.lower() in operator_entries:
@@ -6966,9 +6486,9 @@ def Mode_function(self, param, strdata=""):
                                     SetMode, "+", "-"),
                                  param[2][iloop]))
                         else:
-                            raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
+                            raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
                     else:
-                        raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
+                        raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
 
                 elif param[2][iloop] == "n":
                     if self._nickname.lower() in operator_entries:
@@ -6988,9 +6508,9 @@ def Mode_function(self, param, strdata=""):
                                     SetMode, "+", "-"),
                                  param[2][iloop]))
                         else:
-                            raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
+                            raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
                     else:
-                        raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
+                        raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not an Administrator")
 
                 elif param[2][iloop] == "s":
                     if self._nickname.lower() in operator_entries:
@@ -7011,7 +6531,7 @@ def Mode_function(self, param, strdata=""):
                                                                   self._hostmask, self._nickname,
                                                                   iif(SetMode, "+", "-"), param[2][iloop]))
                     else:
-                        raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
+                        raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
 
                 elif param[2][iloop] == "o" or param[2][iloop] == "O" or param[2][iloop] == "a" or param[2][
                     iloop] == "A":
@@ -7021,10 +6541,10 @@ def Mode_function(self, param, strdata=""):
 
                         if SetMode:
                             if param[2][iloop] in opid.flags:
-                                self.send(":" + ServerName + " NOTICE SERVER :*** Cannot modify usermode '" +
+                                self.send(":" + server_name + " NOTICE SERVER :*** Cannot modify usermode '" +
                                           param[2][iloop] + "'\r\n")
                             else:
-                                raw(self, "491", self._nickname, "Permission denied - Not enough priviledges")
+                                raw_messages.raw(self, "491", self._nickname, "Permission denied - Not enough priviledges")
                         else:
                             if param[2][iloop] == "o":
                                 if opid.hidden:
@@ -7052,7 +6572,7 @@ def Mode_function(self, param, strdata=""):
                                     ":%s!%s@%s MODE %s -%s\r\n" %
                                     (self._nickname, self._username, self._hostmask, self._nickname, opid.flags))
                                 self.send(
-                                    ":" + ServerName +
+                                    ":" + server_name +
                                     " NOTICE SERVER :*** You are no longer an operator on this server\r\n")
                                 for mode in opid.flags:
                                     self._MODE_ = self._MODE_.replace(mode, "")
@@ -7077,29 +6597,29 @@ def Mode_function(self, param, strdata=""):
                                 del operator_entries[self._nickname.lower()]
                             else:
                                 if param[2][iloop].lower() in opid.flags:
-                                    self.send(":" + ServerName + " NOTICE SERVER :*** Cannot remove usermode '" +
+                                    self.send(":" + server_name + " NOTICE SERVER :*** Cannot remove usermode '" +
                                               param[2][iloop] + "', please use the conf\r\n")
                                 else:
-                                    raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
+                                    raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
                     else:
-                        raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
+                        raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
 
                 else:
-                    raw(self, "501", self._nickname)
+                    raw_messages.raw(self, "501", self._nickname)
 
                 iloop += 1
 
     elif param[1].lower() in nickname_to_client_mapping_entries:
         if len(param) == 2:
             if self._nickname.lower() in operator_entries:
-                raw(self, "221", nickname_to_client_mapping_entries[param[1].lower()]._nickname, nickname_to_client_mapping_entries[param[1].lower()]._MODE_)
+                raw_messages.raw(self, "221", nickname_to_client_mapping_entries[param[1].lower()]._nickname, nickname_to_client_mapping_entries[param[1].lower()]._MODE_)
             else:
-                raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
+                raw_messages.raw(self, "481", self._nickname, "Permission Denied - You're not a System operator")
         else:
-            raw(self, "502", self._nickname)
+            raw_messages.raw(self, "502", self._nickname)
 
     else:
-        raw(self, "401", self._nickname, param[1])
+        raw_messages.raw(self, "401", self._nickname, param[1])
 
 
 def Nickserv_function(self, param, msgtype=""):
@@ -7801,14 +7321,14 @@ def settings():  # this is information such as channels, max users etc
                     _founder = ""
                     channel_entries[s_chan.lower()] = chanclass
                     if "r" in s_modes:
-                        chanclass._prop.registered = ServerName
+                        chanclass._prop.registered = server_name
                     if s_founder != "":
                         _founder = _Access.CreateMaskString(s_founder, True)
 
                     chanclass._founder = _founder
                     chanclass._topic = s_topic
 
-                    chanclass._topic_nick = ServerName
+                    chanclass._topic_nick = server_name
                     chanclass._topic_time = GetEpochTime()
 
                     chanclass.ChannelAccess = loads(decompress(s_ax.strip()))
@@ -7960,9 +7480,11 @@ def start():
 
     rehash()
 
-    SetupListeningSockets()
+    # refactor out the use of global by building all of the injectables in a context
+    global raw_messages
+    raw_messages = Raw(server_name, statistics, disabled_functionality)
 
-    # global NickservParam
+    SetupListeningSockets()
 
     if NickservParam == "":
         raise Exception("Cannot run server without Nickserv security, please add an n:line to your config")
