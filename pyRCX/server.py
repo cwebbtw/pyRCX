@@ -1286,7 +1286,11 @@ class Prop:
                     else:
                         stroj = stroj[1:]
 
-                    chanid._prop.onjoin = stroj
+                    if onmsg.upper() == "ONJOIN":
+                        chanid._prop.onjoin = stroj
+                    elif onmsg.upper() == "ONPART":
+                        chanid._prop.onpart = stroj
+
                     for each in chanid._users:
                         cid = nickname_to_client_mapping_entries[each]
                         cid.send(
@@ -2002,7 +2006,7 @@ class Channel(ChannelBaseClass):
         if joinuser.lower() in operator_entries:
             operator_level = operator_entries[joinuser.lower()].operator_level
 
-        return p.match(channelname) == None or not filtering.filter(channelname, "chan", operator_level)
+        return p.match(channelname) is not None and not filtering.filter(channelname, "chan", operator_level)
 
     def __init__(self, channelname, joinuser, creationmodes=""):
         ChannelBaseClass.__init__(self)
