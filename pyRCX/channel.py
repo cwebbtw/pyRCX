@@ -154,7 +154,7 @@ class Channel:
                 self.sendnames(cclientid._nickname, True)
 
     def int_or_zero(self, value):
-        return int(value) if type(value) == int else 0
+        return int(value) if value.isdigit() else 0
 
     def has_channel_permissions(self, nickname):  # return true or false depending upon whether nick is oper
         if nickname.lower() in self._op or nickname.lower() in self._owner or self._server_context.get_operator(
@@ -537,10 +537,6 @@ class Channel:
             if self.MODE_limit:
                 if len(self._users) >= self.int_or_zero(
                         self.MODE_limitamount) and nick.lower() not in self._operator_entries and haskey == False:
-
-                    while True:
-                        exec(input(">>"))
-
                     return -3
 
             if self.MODE_noclones and nick.lower() not in self._operator_entries:
