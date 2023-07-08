@@ -146,7 +146,7 @@ def WriteUsers(nicksv=True, chans=True, access=False):
 
 
 def rehash(par=1):  # this information will be rehashed by any operator with level 4 privlidges (Administrator)
-    myfile = open("pyRCX/conf/pyRCX.conf", "r")
+    myfile = open("conf/pyRCX.conf", "r")
     try:
         global ServerAddress, server_name, NetworkName, connectionsExempt, operlines, Ports
         global MaxUsers, MaxUsersPerConnection, NickfloodAmount, NickfloodWait
@@ -685,7 +685,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
         raw_messages.raw(self, "004", self._nickname, NetworkName)
         raw_messages.raw(self, "005", self._nickname, NetworkName)
         self._sendlusers()
-        self._sendmotd("./pyRCX/conf/motd.conf")
+        self._sendmotd("./conf/motd.conf")
 
         if self._MODE_register:
             self._MODE_register = False
@@ -3392,7 +3392,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                 elif param[0] == "MOTD":
                                     try:
-                                        self._sendmotd("./pyRCX/conf/motd.conf")
+                                        self._sendmotd("./conf/motd.conf")
                                     except:
                                         pass
 
