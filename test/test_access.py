@@ -36,7 +36,7 @@ class AccessTest(unittest.TestCase):
         server.WriteUsers(False, False, True)
 
         # Then
-        with open("pyRCX/database/access.dat", "rb") as file:
+        with open("database/access.dat", "rb") as file:
             server_access: List[access.AccessInformation] = loads(file.read())
 
             self.assertEqual(server_access[0]._object, server_context.server_access_entries[0]._object)

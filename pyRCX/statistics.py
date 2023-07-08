@@ -71,12 +71,12 @@ class Statistics:
         return len(self._channel_entries)
 
     def save(self):
-        with open("pyRCX/database/users.dat", "w") as file:
+        with open("database/users.dat", "w") as file:
             file.write(f"{self.max_local_users()}")
 
     def load(self):
         try:
-            with open("pyRCX/database/users.dat", "r") as file:
+            with open("database/users.dat", "r") as file:
                 self._max_local = int(file.read().strip() or 0)
         except IOError as e:
             self.logger.warning(e)

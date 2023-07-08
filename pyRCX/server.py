@@ -93,7 +93,7 @@ def stripx01(badstring):
 def GetUsers():
     logger = logging.getLogger('USERS')
 
-    myfile = open("pyRCX/database/Nickserv.dat", "rb")
+    myfile = open("database/Nickserv.dat", "rb")
     rdata = myfile.read()
     try:
         if rdata != "":
@@ -115,12 +115,12 @@ def WriteUsers(nicksv=True, chans=True, access=False):
             statistics.save()
 
             if nicksv:
-                myfile = open("pyRCX/database/Nickserv.dat", "wb")
+                myfile = open("database/Nickserv.dat", "wb")
                 myfile.write(compress(dumps(server_context.nickserv_entries)))
                 myfile.close()
 
             if chans:
-                myfile = open("pyRCX/database/channels.dat", "wb")
+                myfile = open("database/channels.dat", "wb")
                 schan = copy(server_context.channel_entries)
                 for each in schan:
                     chanid = server_context.channel_entries[each.lower()]
@@ -136,7 +136,7 @@ def WriteUsers(nicksv=True, chans=True, access=False):
                 myfile.close()
 
             if access:
-                myfile = open("pyRCX/database/access.dat", "wb")
+                myfile = open("database/access.dat", "wb")
                 myfile.write(dumps(server_context.server_access_entries))
                 myfile.close()
         except Exception as exception:
@@ -5814,7 +5814,7 @@ def Nickserv_function(self, param, msgtype=""):
 
 
 def settings():  # this is information such as channels, max users etc
-    with open('pyRCX/database/channels.dat', 'rb') as channels_file:
+    with open('database/channels.dat', 'rb') as channels_file:
         for bytes_line in channels_file.readlines():
             s_line = bytes_line.strip().split(b'\x01')
             if s_line[0].split(b'=')[0].upper() == b'C':
@@ -5846,7 +5846,7 @@ def settings():  # this is information such as channels, max users etc
                     if s_founder != "":
                         _addrec = access_helper.AddRecord("", chanclass.channelname.lower(), "OWNER", _founder, 0, "")
 
-    myfile = open('pyRCX/database/access.dat', 'rb')
+    myfile = open('database/access.dat', 'rb')
     try:
         server_context.server_access_entries = loads(myfile.read())
     except EOFError:
@@ -5899,19 +5899,19 @@ def GetEpochTime():
 
 
 def pyRCXsetup():
-    if os.path.isfile("pyRCX/database/channels.dat") == False:
+    if os.path.isfile("database/channels.dat") == False:
         print("*** Could not find channels file, creating new channel file")
-        createfile = open("database/channels.dat", "w")
+        createfile = open("../database/channels.dat", "w")
         createfile.close()
 
-    if os.path.isfile("pyRCX/database/access.dat") == False:
+    if os.path.isfile("database/access.dat") == False:
         print("*** Could not find access file, setting up access file")
-        createfile = open("pyRCX/database/access.dat", "w")
+        createfile = open("database/access.dat", "w")
         createfile.close()
 
-    if os.path.isfile("pyRCX/database/Nickserv.dat") == False:
+    if os.path.isfile("database/Nickserv.dat") == False:
         print("*** Could not find Nickserv database, installing Nickserv")
-        createfile = open("pyRCX/database/Nickserv.dat", "w")
+        createfile = open("database/Nickserv.dat", "w")
         createfile.close()
 
 
