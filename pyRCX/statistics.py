@@ -1,9 +1,6 @@
 import logging
 import time
 
-from pyRCX.server_context import ServerContext
-
-
 class Statistics:
     """
     A class representing statistics, which maintains running counts of totals and statistics
@@ -13,7 +10,7 @@ class Statistics:
 
     server_launch = time.strftime(" :On-line since %A %B %d %H:%M:%S %Y", time.localtime())
 
-    def __init__(self, server_context: ServerContext):
+    def __init__(self, server_context):
         self._invisible_client_entries = server_context.invisible_client_entries
         self._nickname_to_client_mapping_entries = server_context.nickname_to_client_mapping_entries
         self._operator_entries = server_context.operator_entries

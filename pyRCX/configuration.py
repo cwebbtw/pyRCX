@@ -1,3 +1,5 @@
+from typing import List
+
 from pyRCX.filtering import Filtering
 
 
@@ -8,6 +10,8 @@ class Configuration:
     _DEFAULT_MAX_CHANNELS = 100
     _DEFAULT_MODES = "ntl 75"
     _DEFAULT_SERVER_NAME = "pyRCX"
+    _DEFAULT_PROFANITY = []
+    _DEFAULT_FLOODING_EXEMPT_COMMANDS = []
 
     def __init__(self):
         self.channel_lockdown: int = Configuration._DEFAULT_CHANNEL_LOCKDOWN
@@ -17,3 +21,5 @@ class Configuration:
         self.max_channels_per_user: int = Configuration._DEFAULT_MAX_CHANNELS_PER_USER
         self.max_channels: int = Configuration._DEFAULT_MAX_CHANNELS
         self.server_name: str = Configuration._DEFAULT_SERVER_NAME
+        self.profanity_entries: List[str] = Configuration._DEFAULT_PROFANITY
+        self.flooding_exempt_commands: List[str] = Configuration._DEFAULT_FLOODING_EXEMPT_COMMANDS

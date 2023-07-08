@@ -27,7 +27,7 @@ class JoinCommand:
         _sleep = "%.4f" % (random() / 9)
         time.sleep(float(_sleep))
 
-        for channel_name in parameters[1].split(","):
+        for channel_name in parameters[0].split(","):
 
             if user.has_reached_max_channels():
                 self._raw_messages.raw(user, "405", user._nickname, channel_name)
@@ -35,20 +35,20 @@ class JoinCommand:
                 channel = self._channel_entries.get(channel_name.lower(), None)
                 if channel:
                     if channel.MODE_key != "":
-                        if len(parameters) > 2:
-                            if parameters[2] == channel.MODE_key:
-                                channel.join(user._nickname, parameters[2])
-                            elif parameters[2] == channel._prop.ownerkey:
+                        if len(parameters) > 1:
+                            if parameters[1] == channel.MODE_key:
+                                channel.join(user._nickname, parameters[1])
+                            elif parameters[1] == channel._prop.ownerkey:
                                 if user._nickname.lower() not in channel._owner:
                                     if user._nickname.lower() not in channel._users:
                                         channel._owner.append(user._nickname.lower())
 
-                                channel.join(user._nickname, parameters[2])
+                                channel.join(user._nickname, parameters[1])
 
-                            elif parameters[2] == channel._prop.hostkey:
+                            elif parameters[1] == channel._prop.hostkey:
                                 if user._nickname.lower() not in channel._op and user._nickname.lower() not in channel._users:
                                     channel._op.append(user._nickname.lower())
-                                channel.join(user._nickname, parameters[2])
+                                channel.join(user._nickname, parameters[1])
 
                             else:
                                 # send error to  user
@@ -56,7 +56,8 @@ class JoinCommand:
                                                        channel.channelname)
                                 if channel.MODE_knock:
                                     for each in channel._users:  # need to check for knock mode
-                                        each_channel_user = self._nickname_to_client_mapping_entries.get(each.lower(), None)
+                                        each_channel_user = self._nickname_to_client_mapping_entries.get(each.lower(),
+                                                                                                         None)
                                         if each_channel_user:
                                             each_channel_user.send(
                                                 ":%s!%s@%s KNOCK %s 475\r\n" %
@@ -78,16 +79,16 @@ class JoinCommand:
                                          channel.channelname))
 
 
-                    elif len(parameters) > 2:
-                        if parameters[2] == channel._prop.ownerkey:
+                    elif len(parameters) > 1:
+                        if parameters[1] == channel._prop.ownerkey:
                             if user._nickname.lower() not in channel._owner and user._nickname.lower() not in channel._users:
                                 channel._owner.append(user._nickname.lower())
 
-                        elif parameters[2] == channel._prop.hostkey:
+                        elif parameters[1] == channel._prop.hostkey:
                             if user._nickname.lower() not in channel._op and user._nickname.lower() not in channel._users:
                                 channel._op.append(user._nickname.lower())
 
-                        channel.join(user._nickname, parameters[2])
+                        channel.join(user._nickname, parameters[1])
                     else:
                         channel.join(user._nickname)
                 else:
@@ -97,7 +98,8 @@ class JoinCommand:
                     elif self._configuration.channel_lockdown == 1:
                         self._raw_messages.raw(user, "702", user._nickname)
                     else:
-                        channel = Channel(server_context, raw_messages, channel_name, user._nickname)  # create
+                        channel = Channel(self._server_context, self._raw_messages, channel_name,
+                                          user._nickname)  # create
                         if channel.channelname != "":
                             self._channel_entries[channel_name.lower()] = channel
 

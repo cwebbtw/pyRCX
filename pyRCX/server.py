@@ -22,19 +22,18 @@ from .nickserv import NickServEntry
 from .operator import OperatorEntry
 from .raw import Raw
 from .server_context import ServerContext
+
 from .statistics import Statistics
 # This class needs a major re-work including the nested hierarchy of threading/run methods
 from .user import User
+
+import pyRCX.access as access_helper
 
 server_context: ServerContext = ServerContext()
 
 filtering: Filtering = server_context.configuration.filtering
 
-nickserv_entries: Dict[str, NickServEntry] = {}
-
 disabled_functionality: Dict[str, int] = {}
-
-ServerAccess: List[AccessInformation] = []
 
 statistics: Statistics = Statistics(server_context)
 
@@ -72,8 +71,6 @@ timeDifference = 0
 NTPServer = ""
 
 Ports = []
-FloodingExempt = []
-profanity = []
 temp_noopers = []
 operlines = []
 connections = []
@@ -97,14 +94,13 @@ def GetUsers():
     logger = logging.getLogger('USERS')
 
     myfile = open("pyRCX/database/Nickserv.dat", "rb")
-    global nickserv_entries
     rdata = myfile.read()
     try:
         if rdata != "":
-            nickserv_entries = loads(decompress(rdata))
+            server_context.nickserv_entries = loads(decompress(rdata))
     except:
-        logger.warning("Could not load Nickserv database, possibly because it is corrupted")
-        nickserv_entries = {}
+        logger.warning("Could not load Nickserv database, creating an empty database.\r\n")
+        server_context.nickserv_entries = {}
 
     myfile.close()
 
@@ -120,7 +116,7 @@ def WriteUsers(nicksv=True, chans=True, access=False):
 
             if nicksv:
                 myfile = open("pyRCX/database/Nickserv.dat", "wb")
-                myfile.write(compress(dumps(nickserv_entries)))
+                myfile.write(compress(dumps(server_context.nickserv_entries)))
                 myfile.close()
 
             if chans:
@@ -141,7 +137,7 @@ def WriteUsers(nicksv=True, chans=True, access=False):
 
             if access:
                 myfile = open("pyRCX/database/access.dat", "wb")
-                myfile.write(dumps(ServerAccess))
+                myfile.write(dumps(server_context.server_access_entries))
                 myfile.close()
         except Exception as exception:
             logger.error(exception)
@@ -152,16 +148,14 @@ def WriteUsers(nicksv=True, chans=True, access=False):
 def rehash(par=1):  # this information will be rehashed by any operator with level 4 privlidges (Administrator)
     myfile = open("pyRCX/conf/pyRCX.conf", "r")
     try:
-        global ServerAddress, server_name, NetworkName, connectionsExempt, operlines, profanity, Ports
-        global FloodingExempt, MaxUsers, MaxUsersPerConnection, NickfloodAmount, NickfloodWait
+        global ServerAddress, server_name, NetworkName, connectionsExempt, operlines, Ports
+        global MaxUsers, MaxUsersPerConnection, NickfloodAmount, NickfloodWait
         global NickservParam, NTPServer, ipaddress, ServerAdmin1, ServerAdmin2, AdminPassword, ServerPassword
         global passmsg, HostMaskingParam, HostMasking, PrefixChar, MaxServerEntries, MaxChannelEntries, MaxUserEntries
         global defconMode, UserDefaultModes
 
         operlines = []
-        profanity = []
         Ports = []
-        FloodingExempt = []
         connectionsExempt = []
 
         line_num = 0
@@ -227,7 +221,7 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
 
             if lineStr[0] == "f":
                 s_line = lineStr.split(":")
-                FloodingExempt.append(s_line[1].upper().split(";")[0])
+                server_context.configuration.flooding_exempt_commands.append(s_line[1].upper().split(";")[0])
 
             if lineStr[0] == "D":
                 s_line = lineStr.split(":")
@@ -272,7 +266,7 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
                 s_line = lineStr.split(":")
                 if s_line[1] == "profanity":
                     # TODO this should really just be part of the filtering still not another global variable
-                    profanity.append(s_line[2])
+                    server_context.configuration.profanity_entries.append(s_line[2])
                 else:
                     filtering.add_filter(FilterEntry(s_line[1], s_line[2], s_line[3].split(";")[0]))
 
@@ -478,467 +472,11 @@ def compilemodestr(modes, chan=False):
 
 
 def CheckServerAccess(nickid=False):
-    for each in list(ServerAccess):
+    for each in list(server_context.server_access_entries):
         if int(GetEpochTime()) >= each._expires:
             if each._deleteafterexpire:
-                ServerAccess.remove(each)
+                server_context.server_access_entries.remove(each)
                 WriteUsers(False, False, True)
-
-
-class Access:
-    def __init__(self):
-        pass
-
-    # channels only - this only needs to be done on events where access may apply, commands are JOIN and ACCESS
-    def CheckChannelExpiry(self, chanid):
-        for each in list(chanid.ChannelAccess):
-            if int(GetEpochTime()) >= each._expires:
-                if each._deleteafterexpire:
-                    chanid.ChannelAccess.remove(each)
-                    # _Access.records.remove(each)
-
-    # channels only - this only needs to be done on events where access may apply, commands are JOIN and ACCESS
-    def CheckSelfExpiry(self, nickid):
-        for each in list(nickid._access):
-            if int(GetEpochTime()) >= each._expires:
-                if each._deleteafterexpire:
-                    nickid._access.remove(each)
-                    # _Access.records.remove(each)
-
-    def CFS(self, _mask):
-        "Create format string"
-        _mask = _mask.replace("\\", "\\\\").replace("[", "\[").replace("]", "\]").replace("{", "\{")
-        _mask = _mask.replace(
-            "}", "\}").replace(
-            ".", "\.").replace(
-            "+", "\+").replace(
-            "^", "\^").replace(
-            "$", "\$").replace(
-            "?", ".").replace(
-            "*", ".*")
-
-        return _mask
-
-    def MatchAccess(self, _mask, cid, NoMatchIP=False):
-        if _mask[0] == "&":
-            if "&" == _mask[0]:
-                if cid._MODE_register:
-                    for groupnicks in list(nickserv_entries.values()):
-                        if _mask[1:].lower() in groupnicks.grouped_nicknames or _mask[
-                                                                                1:].lower() == groupnicks._nickname.lower():
-                            if cid._nickname.lower() in groupnicks.grouped_nicknames or cid._nickname.lower() == groupnicks._nickname.lower():
-                                return 1
-
-        p = re.compile("^(.+)\!(.+)\@(.+)\$(.+)$")
-        g = p.match(_mask)
-        if g == None:
-            return -1
-        else:
-            _nick = g.group(1)
-            _nick_re = "^" + self.CFS(_nick.lower()) + "\!"
-
-            _user = g.group(2)
-            _user_re = self.CFS(_user.lower()) + "\@"
-
-            _host = g.group(3)
-            _host_re = self.CFS(_host.lower())
-
-            _server = g.group(4)
-            _server_re = "^" + self.CFS(_server.lower()) + "$"
-
-            x = re.compile(_nick_re + _user_re + _host_re + "$")
-
-            s = re.compile(_server_re)
-
-            if s.match(cid._server):
-                if x.match(cid._nickname.lower() + "!" + cid._username.lower() + "@" + cid._hostmask.lower()) != None:
-                    return 1
-                if x.match(
-                        cid._nickname.lower() + "!" + cid._username.lower() + "@" + cid._hostname.lower()) != None and NoMatchIP == False:
-                    return 1
-                if x.match(cid._nickname.lower() + "!" + cid._username.lower() + "@" + cid.details[
-                    0]) != None and NoMatchIP == False:
-                    return 1
-            else:
-                return -1
-
-    def getgroup(self, d, id):
-        try:
-            if d.group(id) == "":
-                return "*"
-            else:
-                return d.group(id)
-        except:
-            return "*"
-
-    def CreateMaskString(self, strin, server=False):
-        if strin[0] == "&":
-            if "!" in strin or "@" in strin:
-                return -1
-            else:
-                if strin.lower()[1:] in nickserv_entries or server == True:
-                    return strin
-                else:
-                    for groupnicks in list(nickserv_entries.values()):
-                        if strin.lower()[1:] in groupnicks.grouped_nicknames:
-                            return strin
-
-                    return -2
-
-        if strin.count("!") > 1 or strin.count("$") > 1 or strin.count("@") > 1:
-            return -1
-        prefix, suffix, term, chars = "", "", 0, "[a-z0-9A-Z\_\@\$\!-\^\|\`\'\[\]\>\~\{\}\x7F-\xFF]{0,32}"
-
-        if "!" in strin:
-            if "@" in strin:
-                if "$" in strin:
-                    term = 5
-                    smatch = "^(" + chars + ")\!(" + chars + ")\@(" + chars + ")\$(" + chars + ")$"
-                else:
-                    term = 1
-                    smatch = "^(" + chars + ")\!(" + chars + ")\@(" + chars + ")$"
-                    suffix = "$*"
-            else:
-                if "$" in strin:
-                    term = 6
-                    smatch = "^(" + chars + ")\!(" + chars + ")\$(" + chars + ")$"
-                    suffix = "@*$"
-                else:
-                    term = 2
-                    smatch = "^(" + chars + ")\!(" + chars + ")$"
-                    suffix = "@*$*"
-
-        elif "@" in strin:
-            prefix = "*!"
-            if "$" in strin:
-                term = 7
-                smatch = "^(" + chars + ")\@(" + chars + ")\$(" + chars + ")$"
-            else:
-                term = 3
-                smatch = "^(" + chars + ")\@(" + chars + ")$"
-                suffix = "$*"
-
-        elif "$" in strin:
-
-            svr = re.compile("(" + chars + "|)\$(" + chars + "|)")  # lol$lol
-            m = svr.match(strin)
-            if m == None:
-                return -1
-            if len(m.groups()) == 2:
-                return "*!*@" + self.getgroup(m, 1) + "$" + self.getgroup(m, 2)
-        else:
-            term = 4
-            smatch = "^(" + chars + ")$"
-            suffix = "!*@*$*"
-
-        p = re.compile(smatch)
-        if p == None:
-            return -1
-        else:
-            g = p.match(strin)
-            if g == None:
-                return -1
-            try:
-                if term == 0:
-                    return -1
-                if term == 1:
-                    return (self.getgroup(g, 1) + "!" + self.getgroup(g, 2) + "@" + self.getgroup(g,
-                                                                                                  3) + suffix).replace(
-                        ":", "")
-                if term == 2:
-                    return (self.getgroup(g, 1) + "!" + self.getgroup(g, 2) + suffix).replace(":", "")
-                if term == 3:
-                    return (prefix + self.getgroup(g, 1) + "@" + self.getgroup(g, 2) + suffix).replace(":", "")
-                if term == 4:
-                    return (self.getgroup(g, 1) + suffix).replace(":", "")
-                if term == 5:
-                    return (self.getgroup(g, 1) + "!" + self.getgroup(g, 2) + "@" + self.getgroup(g,
-                                                                                                  3) + "$" + self.getgroup(
-                        g, 4)).replace(":", "")
-                if term == 6:
-                    return (self.getgroup(g, 1) + "!" + self.getgroup(g, 2) + suffix + self.getgroup(g, 3)).replace(":",
-                                                                                                                    "")
-                if term == 7:
-                    return (prefix + self.getgroup(g, 1) + "@" + self.getgroup(g, 2) + "$" + self.getgroup(g,
-                                                                                                           3)).replace(
-                        ":", "")
-                if term == 8:
-                    return (prefix + self.getgroup(g, 1)).replace(":", "")
-            except:
-                return "*!*@*$*"
-
-    def ClearRecords(self, object, cid, level=""):
-        _securitymsg = False
-        if object == "*":
-            opid = server_context.operator_entries[cid._nickname.lower()]
-            for each in list(ServerAccess):
-
-                if level == "" or level.upper() == each._level.upper():
-                    if (opid.operator_level + 2) < each._oplevel:
-                        _securitymsg = True
-                    else:
-                        ServerAccess.remove(each)
-
-            if _securitymsg:
-                raw_messages.raw(cid, "922", cid._nickname, "*")
-            else:
-                if level == "":
-                    level = "*"
-                raw_messages.raw(cid, "820", cid._nickname, "*", level)
-
-        elif object[0] == "#" or object[0] == "%" or object[0] == "&":
-            chanid = server_context.channel_entries[object.lower()]
-            _operlevel = 0
-            if cid._nickname.lower() in chanid._op:
-                _operlevel = 1
-            if cid._nickname.lower() in chanid._owner:
-                _operlevel = 2
-            if cid._nickname.lower() in server_context.operator_entries:
-                opid = server_context.operator_entries[cid._nickname.lower()]
-                _operlevel = opid.operator_level + 2
-
-            if _operlevel < 1:
-                raw_messages.raw(cid, "913", cid._nickname, chanid.channelname)
-                return -1
-
-            for each in list(chanid.ChannelAccess):
-                if level == "" or level.upper() == each._level.upper():
-                    if _operlevel < each._oplevel:
-                        _securitymsg = True
-                    else:
-                        chanid.ChannelAccess.remove(each)
-
-            if _securitymsg:
-                raw_messages.raw(cid, "922", cid._nickname, chanid.channelname)
-            else:
-                if level == "":
-                    level = "*"
-                raw_messages.raw(cid, "820", cid._nickname, chanid.channelname, level)
-
-        else:
-            for each in list(cid._access):
-                if level == "" or level.upper() == each._level.upper():
-                    cid._access.remove(each)
-
-            if level == "":
-                level = "*"
-            raw_messages.raw(cid, "820", cid._nickname, cid._nickname, level)
-
-    def DelRecord(self, cid, object, level, mask):
-        if object[0] == "*":
-            opid = server_context.operator_entries[cid._nickname.lower()]
-            for each in list(ServerAccess):
-                if each._mask.lower() == mask.lower() and each._level.lower() == level.lower():
-                    if (opid.operator_level + 2) < each._oplevel:
-                        return -2
-                    ServerAccess.remove(each)
-
-                    return 1
-
-        elif object[0] == "#" or object[0] == "%" or object[0] == "&":
-            chanid = server_context.channel_entries[object.lower()]
-            _operlevel = 0
-            if cid._nickname.lower() in chanid._op:
-                _operlevel = 1
-            if cid._nickname.lower() in chanid._owner:
-                _operlevel = 2
-            if cid._nickname.lower() in server_context.operator_entries:
-                opid = server_context.operator_entries[cid._nickname.lower()]
-                _operlevel = opid.operator_level + 2
-
-            if cid._nickname.lower() not in chanid._op and cid._nickname.lower() not in chanid._owner and cid._nickname.lower() not in server_context.operator_entries:
-                return -2  # not op - return no access
-            if level.upper() == "OWNER" and cid._nickname.lower() not in chanid._owner and cid._nickname.lower() not in server_context.operator_entries:
-                return -2  # not owner - return no access
-
-            CopyChannelAccess = list(chanid.ChannelAccess)
-            for each in CopyChannelAccess:
-                if each._mask.lower() == mask.lower() and each._level.lower() == level.lower():
-                    if _operlevel < each._oplevel:
-                        return -2
-                    chanid.ChannelAccess.remove(each)
-
-                    return 1
-
-        else:
-            CopyAccess = list(cid._access)
-            for each in CopyAccess:
-                if each._mask.lower() == mask.lower() and each._level.lower() == level.lower():
-                    cid._access.remove(each)
-
-                    return 1
-
-        return -1
-
-    def AddRecord(self, cid, object, level, mask, expires, tag):
-        _list = None
-        objid = None
-        if object == "*":
-            if cid == "":
-                _operlevel = 6
-            else:
-                opid = server_context.operator_entries[cid._nickname.lower()]
-                _operlevel = opid.operator_level + 2
-
-            _list = ServerAccess
-
-        elif object[0] == "#" or object[0] == "%" or object[0] == "&":
-            objid = server_context.channel_entries[object.lower()]
-            _operlevel = 0
-            if cid == "":
-                _operlevel = 5
-            else:
-                if cid._nickname.lower() in objid._op:
-                    _operlevel = 1
-                if cid._nickname.lower() in objid._owner:
-                    _operlevel = 2
-                if cid._nickname.lower() in server_context.operator_entries:
-                    opid = server_context.operator_entries[cid._nickname.lower()]
-                    _operlevel = opid.operator_level + 2
-
-                if cid._nickname.lower() not in objid._op and cid._nickname.lower() not in objid._owner and cid._nickname.lower() not in server_context.operator_entries:
-                    return -2  # not op - return no access
-                if level.upper() == "OWNER" and cid._nickname.lower() not in objid._owner and cid._nickname.lower() not in server_context.operator_entries:
-                    return -2  # not owner - return no access
-
-            _list = objid.ChannelAccess
-
-        else:
-            objid = server_context.nickname_to_client_mapping_entries[object.lower()]
-            _list = objid._access
-            _operlevel = 0
-
-        for each in _list:
-            if each._mask.lower() == mask.lower():
-                return -1  # Duplicate access entry
-
-        entry = None
-        if cid == "":
-            setby = server_context.configuration.server_name
-        else:
-            setby = cid._username + "@" + cid._hostmask
-
-        if object == "*":
-            entry = AccessInformation("*", level, mask, setby, expires, tag, _operlevel)
-            ServerAccess.append(entry)
-
-        # TODO this should support prefixchar rather than hard coded values
-        elif object[0] == "#" or object[0] == "%" or object[0] == "&":
-            entry = AccessInformation(objid.channelname, level, mask, setby, expires, tag, _operlevel)
-            objid.ChannelAccess.append(entry)
-        else:
-            entry = AccessInformation(objid._nickname, level, mask, setby, expires, tag, _operlevel)
-            objid._access.append(entry)
-
-        return 1
-
-
-_Access = Access()
-
-
-class PropResetChannel(threading.Thread):
-    def __init__(self, chanid):
-        self.chanid = chanid
-        threading.Thread.__init__(self)
-
-    def run(self):
-        try:
-            exptime = int(GetEpochTime()) + self.chanid._prop.reset
-
-            while int(GetEpochTime()) <= exptime and self.chanid.channelname != "":
-                if len(self.chanid._users) != 0:
-                    return
-
-                time.sleep(0.1)
-
-            if len(self.chanid._users) == 0:
-                self.chanid._users = {}
-                self.chanid._watch = []
-                self.chanid._prop = None
-                self.chanid._topic = ""
-                self.chanid.ChannelAccess = []
-                delGlobalChannel(self.chanid.channelname.lower())
-                self.chanid.channelname = ""
-        except:
-            pass
-
-
-def setupModes(self, creationmodes_full):
-    creationmodes = creationmodes_full.split(" ")[0]
-    if "Z" in creationmodes:
-        self.MODE_noircx = True
-    if "m" in creationmodes:
-        self.MODE_moderated = True
-    if "d" in creationmodes:
-        self.MODE_createclone = True
-    if "K" in creationmodes:
-        self.MODE_noclones = True
-    if "e" in creationmodes:
-        self.MODE_cloneroom = True
-    if "M" in creationmodes and self.MODE_noircx == False:
-        self.MODE_ownersetmode = True
-    if "G" in creationmodes:
-        self.MODE_gagonban = True
-    if "Q" in creationmodes and self.MODE_noircx == False:
-        self.MODE_ownerkick = True
-    if "A" in creationmodes:
-        self.MODE_Adminonly = True
-    if "f" in creationmodes:
-        self.MODE_profanity = True
-    if "N" in creationmodes:
-        self.MODE_servicechan = True
-    if "P" in creationmodes and self.MODE_noircx == False:
-        self.MODE_ownersetprop = True
-    if "X" in creationmodes:
-        self.MODE_ownersetaccess = True
-    if "R" in creationmodes:
-        self.MODE_registeredonly = True
-    if "w" in creationmodes:
-        self.MODE_whisper = True
-    if "s" in creationmodes:
-        self.MODE_secret = True
-    if "S" in creationmodes:
-        self.MODE_nomodechanges = True
-    if "h" in creationmodes and "s" not in creationmodes and "p" not in creationmodes:
-        self.MODE_hidden = True
-    if "T" in creationmodes and self.MODE_noircx == False:
-        self.MODE_ownertopic = True
-    if "t" in creationmodes and "T" not in creationmodes:
-        self.MODE_optopic = True
-    if "n" in creationmodes:
-        self.MODE_externalmessages = True
-    if "r" in creationmodes:
-        self.MODE_registered = True
-    if "x" in creationmodes:
-        self.MODE_auditorium = True
-    if "a" in creationmodes:
-        self.MODE_authenticatedclients = True
-    if "p" in creationmodes and "s" not in creationmodes and "h" not in creationmodes:
-        self.MODE_private = True
-    if "c" in creationmodes:
-        self.MODE_nocolour = True
-    if "C" in creationmodes and "c" not in creationmodes:
-        self.MODE_stripcolour = True
-    if "u" in creationmodes:
-        self.MODE_knock = True
-    if "l" in creationmodes or "k" in creationmodes:
-        data_limit = str(myint(creationmodes_full.split(" ")[1]))
-        data_key = creationmodes_full.split(" ")[1]
-        if "l" in creationmodes and "k" in creationmodes:
-            if creationmodes.find("l") > creationmodes.find("k"):
-                data_key = creationmodes_full.split(" ")[1]
-                data_limit = str(myint(creationmodes_full.split(" ")[2]))
-            else:
-                data_key = creationmodes_full.split(" ")[2]
-                data_limit = str(myint(creationmodes_full.split(" ")[1]))
-
-        if "l" in creationmodes:
-            self.MODE_limit = True
-            self.MODE_limitamount = data_limit
-
-        if "k" in creationmodes:
-            self.MODE_key = data_key
-
 
 Noop = False
 
@@ -948,12 +486,6 @@ _lastError = []
 def getGlobalChannels():
     for each in server_context.channel_entries:
         yield server_context.channel_entries[each]
-
-
-def delGlobalChannel(chan_name):
-    if chan_name.lower() in server_context.channel_entries:
-        del server_context.channel_entries[chan_name.lower()]
-
 
 def getUserOBJ(nick):
     if nick.lower() in server_context.nickname_to_client_mapping_entries:
@@ -1060,16 +592,16 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
              str(tuError[1]), server_context.configuration.server_name))
 
     def selfaccess(self, cclientid):
-        _Access.CheckSelfExpiry(cclientid)
+        access_helper.CheckSelfExpiry(cclientid)
         if self._nickname.lower() in server_context.operator_entries:
             return True  # can't ignore opers!!!
         for each in cclientid._access:
             if each._level == "DENY":
-                ret = _Access.MatchAccess(each._mask, self)
+                ret = access_helper.MatchAccess(each._mask, self)
                 if ret == 1:
                     for findgrant in cclientid._access:
                         if findgrant._level == "GRANT":
-                            gret = _Access.MatchAccess(findgrant._mask, self)
+                            gret = access_helper.MatchAccess(findgrant._mask, self)
                             if gret == 1:
                                 return True
                     return False
@@ -1121,13 +653,13 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
     def _sendwelcome(self):
         CheckServerAccess()
         grantfound = False
-        for each in ServerAccess:
+        for each in server_context.server_access_entries:
             if each._level == "DENY":
-                ret = _Access.MatchAccess(each._mask, self)
+                ret = access_helper.MatchAccess(each._mask, self)
                 if ret == 1:
-                    for findgrant in ServerAccess:
+                    for findgrant in server_context.server_access_entries:
                         if findgrant._level == "GRANT":
-                            gret = _Access.MatchAccess(findgrant._mask, self)
+                            gret = access_helper.MatchAccess(findgrant._mask, self)
                             if gret == 1:
                                 grantfound = True
                                 break
@@ -1164,12 +696,12 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
         is_groupednick = False
 
-        for groupnicks in list(nickserv_entries.values()):
+        for groupnicks in list(server_context.nickserv_entries.values()):
             if self._nickname.lower() in groupnicks.grouped_nicknames:
                 is_groupednick = True
                 break
 
-        if self._nickname.lower() in nickserv_entries and self._nickname.lower() in server_context.nickname_to_client_mapping_entries and self._nosendnickserv == False:
+        if self._nickname.lower() in server_context.nickserv_entries and self._nickname.lower() in server_context.nickname_to_client_mapping_entries and self._nosendnickserv == False:
             self.send(
                 ":%s!%s@%s NOTICE %s :That nickname is owned by somebody else\r\n:%s!%s@%s NOTICE %s :If this is your nickname, you can identify with \x02/nickserv IDENTIFY \x1Fpassword\x1F\x02\r\n" %
                 ("NickServ", "NickServ", NetworkName, self._nickname, "NickServ", "NickServ", NetworkName,
@@ -1450,7 +982,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                             pass
                         else:
 
-                            if param[0] not in FloodingExempt:
+                            if param[0] not in server_context.configuration.flooding_exempt_commands:
 
                                 # if current time - time the last command was sent = 0, meaning data is being sent far too fast, add,
                                 if int((
@@ -2311,7 +1843,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                 else:
                                                                     floodlimit = 30
 
-                                                                if self.pmflooding == floodlimit and "PRIVMSG" not in FloodingExempt:  # 15 commands per 1000 miliseconds, anymore than that will kill the user
+                                                                if self.pmflooding == floodlimit and "PRIVMSG" not in server_context.configuration.flooding_exempt_commands:  # 15 commands per 1000 miliseconds, anymore than that will kill the user
                                                                     print("Input flooding!!")
                                                                     self.quittype = 4
                                                                     self.send(
@@ -2393,7 +1925,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                         sendprivmsg = False
                                                                     if recip._MODE_filter:
                                                                         foundprofanity = False
-                                                                        for all in profanity:
+                                                                        for all in server_context.configuration.profanity_entries:
                                                                             tmsg = re.compile(all.lower().replace(
                                                                                 ".", r"\.").replace("*", "(.+|)"))
                                                                             if tmsg.match(msg.lower()):
@@ -2612,7 +2144,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                 elif param[0] == "ACCESS":
                                     if chanid:
-                                        _Access.CheckChannelExpiry(chanid)
+                                        access_helper.CheckChannelExpiry(chanid)
                                         if len(param) == 2:
                                             if chanid.MODE_noircx and self._nickname.lower() not in server_context.operator_entries:
                                                 raw_messages.raw(self, "997", self._nickname, chanid.channelname,
@@ -2655,7 +2187,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                         else:  # ACCESS # ADD OWNER
                                                             if len(param) == 4:
                                                                 param.append("*!*@*$*")
-                                                            _mask = _Access.CreateMaskString(param[4])
+                                                            _mask = access_helper.CreateMaskString(param[4])
                                                             if _mask == -1:
                                                                 raw_messages.raw(self, "906", self._nickname, param[4])
                                                             elif _mask == -2:
@@ -2670,7 +2202,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                     else:
                                                                         tag = param[6]
 
-                                                                _addrec = _Access.AddRecord(
+                                                                _addrec = access_helper.AddRecord(
                                                                     self, chanid.channelname, param[3].upper(),
                                                                     _mask, exp, tag)
                                                                 if _addrec == 1:
@@ -2703,13 +2235,13 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                             3].upper() == "HOST" or param[3].upper() == "OWNER":
                                                             if len(param) == 4:
                                                                 param.append("*!*@*$*")
-                                                            _mask = _Access.CreateMaskString(param[4])
+                                                            _mask = access_helper.CreateMaskString(param[4])
                                                             if _mask == -1:
                                                                 raw_messages.raw(self, "906", self._nickname, param[4])
                                                             elif _mask == -2:
                                                                 raw_messages.raw(self, "909", self._nickname)
                                                             else:
-                                                                _delrec = _Access.DelRecord(
+                                                                _delrec = access_helper.DelRecord(
                                                                     self, chanid.channelname, param[3].upper(), _mask)
                                                                 if _delrec == 1:
                                                                     stringinf = "%s %s %s" % (
@@ -2735,11 +2267,11 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                             3].upper() != "OWNER":
                                                             raw_messages.raw(self, "900", self._nickname, param[3])
                                                         else:
-                                                            _Access.ClearRecords(
+                                                            access_helper.ClearRecords(
                                                                 chanid.channelname, self, param[3].upper())
 
                                                     elif len(param) > 2:
-                                                        _Access.ClearRecords(chanid.channelname, self)
+                                                        access_helper.ClearRecords(chanid.channelname, self)
 
                                                 elif param[2].upper() == "LIST":
                                                     if isOp(self._nickname, chanid.channelname) == False:
@@ -2772,7 +2304,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                             chanid._prop.registered = operuser
                                                             _founder = ""
                                                             if len(param) == 4:
-                                                                _founder = _Access.CreateMaskString(param[3])
+                                                                _founder = access_helper.CreateMaskString(param[3])
                                                                 if _founder == -1:
                                                                     _founder = ""
                                                                     raw_messages.raw(self, "906", self._nickname,
@@ -2782,7 +2314,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                     raw_messages.raw(self, "909", self._nickname)
 
                                                                 else:
-                                                                    _addrec = _Access.AddRecord(
+                                                                    _addrec = access_helper.AddRecord(
                                                                         "", chanid.channelname.lower(),
                                                                         "OWNER", _founder, 0, "")
                                                                     stringinf = "%s %s %s %d %s %s" % (
@@ -2823,7 +2355,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                             chanid._prop.registered = ""
                                                             chanid._founder = ""
 
-                                                            _Access.ClearRecords(chanid.channelname, self, "OWNER")
+                                                            access_helper.ClearRecords(chanid.channelname, self, "OWNER")
 
                                                             for each in chanid._users:
                                                                 cclientid = \
@@ -2862,9 +2394,9 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                         else:
                                             CheckServerAccess()
                                             ret = "*"
-                                            _list = ServerAccess
+                                            _list = server_context.server_access_entries
 
-                                        _Access.CheckSelfExpiry(self)
+                                        access_helper.CheckSelfExpiry(self)
 
                                         if opid or param[1] != "*":
                                             operlvl = False
@@ -2910,7 +2442,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                         raw_messages.raw(self, "916", self._nickname,
                                                                                          ret)
                                                                     else:
-                                                                        _mask = _Access.CreateMaskString(param[4])
+                                                                        _mask = access_helper.CreateMaskString(param[4])
                                                                         if _mask == -1:
                                                                             raw_messages.raw(self, "906",
                                                                                              self._nickname, param[4])
@@ -2927,7 +2459,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                                 else:
                                                                                     tag = param[6]
 
-                                                                            _addrec = _Access.AddRecord(
+                                                                            _addrec = access_helper.AddRecord(
                                                                                 self, ret, param[3].upper(),
                                                                                 _mask, exp, tag)
                                                                             if _addrec == 1:
@@ -2964,14 +2496,14 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                             else:
                                                                 if param[3].upper() == "DENY" or param[
                                                                     3].upper() == "GRANT":
-                                                                    _mask = _Access.CreateMaskString(param[4])
+                                                                    _mask = access_helper.CreateMaskString(param[4])
                                                                     if _mask == -1:
                                                                         raw_messages.raw(self, "906", self._nickname,
                                                                                          param[4])
                                                                     elif _mask == -2:
                                                                         raw_messages.raw(self, "909", self._nickname)
                                                                     else:
-                                                                        _delrec = _Access.DelRecord(
+                                                                        _delrec = access_helper.DelRecord(
                                                                             self, ret, param[3].upper(), _mask)
                                                                         if _delrec == 1:
                                                                             stringinf = "%s %s %s" % (
@@ -3004,7 +2536,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                     raw_messages.raw(self, "900", self._nickname,
                                                                                      param[3])
                                                                 else:
-                                                                    _Access.ClearRecords(ret, self, param[3].upper())
+                                                                    access_helper.ClearRecords(ret, self, param[3].upper())
                                                                     if ret == "*":
                                                                         sendWatchOpers(
                                                                             "Notice -- Server access clear, '%s' has been cleared by (%s!%s@%s) [%s] \r\n" % (
@@ -3015,7 +2547,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                     WriteUsers(False, False, True)
 
                                                             elif len(param) > 2:
-                                                                _Access.ClearRecords(ret, self)
+                                                                access_helper.ClearRecords(ret, self)
                                                                 if ret == "*":
                                                                     sendWatchOpers(
                                                                         "Notice -- Server access has been cleared (%s!%s@%s) [%s] \r\n" % (
@@ -3677,11 +3209,10 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                             if self._nickname.lower() in server_context.operator_entries:
                                                 useIP = False
                                             who_count = 0
-                                            tempAccessObj = Access()
-                                            param[1] = tempAccessObj.CreateMaskString(_who)
+                                            param[1] = access_helper.CreateMaskString(_who)
                                             for each in server_context.nickname_to_client_mapping_entries:
                                                 nickid = server_context.nickname_to_client_mapping_entries[each]
-                                                if tempAccessObj.MatchAccess(param[1], nickid, useIP):
+                                                if access_helper.MatchAccess(param[1], nickid, useIP):
                                                     who_count += 1
                                                     if who_count == 20 and self._nickname.lower() not in server_context.operator_entries:
                                                         raw_messages.raw(self, "416", self._nickname, "WHO")
@@ -3702,11 +3233,10 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                             if msg[0] == ":":
                                                 msg = strdata.split(" ", 2)[2][1:]
                                             kill_count = 0
-                                            tempAccessObj = Access()
-                                            param[1] = tempAccessObj.CreateMaskString(param[1].lower())
+                                            param[1] = access_helper.CreateMaskString(param[1].lower())
                                             for each in server_context.nickname_to_client_mapping_entries:
                                                 nickid = server_context.nickname_to_client_mapping_entries[each]
-                                                if tempAccessObj.MatchAccess(param[1], nickid):
+                                                if access_helper.MatchAccess(param[1], nickid):
                                                     kill_count += 1
                                                     if kill_count == 5:
                                                         raw_messages.raw(self, "416", self._nickname, "KILLMASK")
@@ -3839,7 +3369,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                             self.send(
                                                 ":%s!%s@%s %s %s :\x02pyRCX nickname services\x02 (currently %d registered users)\r\n:%s!%s@%s %s %s :Type \x1F/nickserv HELP\x1F for more information\r\n" % (
                                                     "NickServ", "NickServ", NetworkName, "NOTICE", self._nickname,
-                                                    len(nickserv_entries), "NickServ", "NickServ", NetworkName,
+                                                    len(server_context.nickserv_entries), "NickServ", "NickServ", NetworkName,
                                                     "NOTICE", self._nickname))
 
                                         else:
@@ -3933,7 +3463,10 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                             else:
                                 raw_messages.raw(self, "451", self._nickname)
 
-                    except IndexError:
+                    except IndexError as e:
+                        import traceback
+
+                        print(traceback.format_exc())
                         raw_messages.raw(self, "461", self._nickname, param[0])
 
                     # except:
@@ -4199,7 +3732,7 @@ def Nick_function(self: ClientConnecting, param):
                 gagchan = server_context.channel_entries[gagcheck.lower()]
                 if gagchan.MODE_gagonban and self._nickname.lower() in gagchan._users:
                     for each in gagchan.ChannelAccess:
-                        ret = Access().MatchAccess(each._mask, self)
+                        ret = access_helper.MatchAccess(each._mask, self)
                         if ret == 1:
                             if each._level.upper() == "DENY":
                                 found_deny = True
@@ -4303,7 +3836,7 @@ def Nick_function(self: ClientConnecting, param):
 
                         is_groupednick = False
 
-                        for groupnicks in list(nickserv_entries.values()):
+                        for groupnicks in list(server_context.nickserv_entries.values()):
                             if self._nickname.lower() in groupnicks.grouped_nicknames or self._nickname.lower() == groupnicks._nickname.lower():
                                 if temp_oldnick.lower() in groupnicks.grouped_nicknames or temp_oldnick.lower() == groupnicks._nickname.lower():
                                     if self._MODE_register:
@@ -4319,7 +3852,7 @@ def Nick_function(self: ClientConnecting, param):
                                 0] != PrefixChar and self._nickname.lower() not in server_context.operator_entries:
                                 self._username = PrefixChar + self._username
 
-                        if temp_nick.lower() in nickserv_entries or is_groupednick:
+                        if temp_nick.lower() in server_context.nickserv_entries or is_groupednick:
                             if self._MODE_register == False:
                                 self.send(
                                     ":%s!%s@%s NOTICE %s :That nickname is owned by somebody else\r\n:%s!%s@%s NOTICE %s :If this is your nickname, you can identify with \x02/nickserv IDENTIFY \x1Fpassword\x1F\x02\r\n" % (
@@ -4718,14 +4251,14 @@ def Mode_function(self, param, strdata=""):
                                     elif param[2][iloop] == "b":
                                         _rec = ""
                                         if SetMode:
-                                            _mask = _Access.CreateMaskString(param[paramloop].lower())
+                                            _mask = access_helper.CreateMaskString(param[paramloop].lower())
                                             if _mask == -1:
                                                 raw_messages.raw(self, "906", self._nickname, param[paramloop].lower())
                                             elif _mask == -2:
                                                 raw_messages.raw(self, "909", self._nickname)
                                             else:
                                                 tag, exp = "", 0
-                                                _rec = _Access.AddRecord(self, chan.channelname,
+                                                _rec = access_helper.AddRecord(self, chan.channelname,
                                                                          "DENY", _mask, exp, tag)
                                                 if _rec == 1:
                                                     stringinf = "%s %s %s %d %s %s" % (
@@ -4740,13 +4273,13 @@ def Mode_function(self, param, strdata=""):
                                                 else:
                                                     pass
                                         else:
-                                            _mask = _Access.CreateMaskString(param[paramloop].lower())
+                                            _mask = access_helper.CreateMaskString(param[paramloop].lower())
                                             if _mask == -1:
                                                 raw_messages.raw(self, "906", self._nickname, param[paramloop].lower())
                                             elif _mask == -2:
                                                 raw_messages.raw(self, "909", self._nickname)
                                             else:
-                                                _rec = _Access.DelRecord(self, chan.channelname, "DENY", _mask)
+                                                _rec = access_helper.DelRecord(self, chan.channelname, "DENY", _mask)
                                                 if _rec == 1:
                                                     stringinf = "%s %s %s" % (chan.channelname, "DENY", _mask)
                                                     raw_messages.raw(self, "802", self._nickname, stringinf)
@@ -5637,8 +5170,8 @@ def Nickserv_function(self, param, msgtype=""):
                     checkemail = emaila.split("@")[1].split(".")[1]
                     toomanynicks = 0
                     exemptFromConnectionKiller = False
-                    for registered_nicknames in nickserv_entries:
-                        mydetails_obj = nickserv_entries[registered_nicknames.lower()]
+                    for registered_nicknames in server_context.nickserv_entries:
+                        mydetails_obj = server_context.nickserv_entries[registered_nicknames.lower()]
                         mydetails = mydetails_obj._details
                         if mydetails == self.details[0]:
                             toomanynicks += 1
@@ -5659,12 +5192,12 @@ def Nickserv_function(self, param, msgtype=""):
                         exemptFromConnectionKiller = True
 
                     grouped_nick = False
-                    for groupnicks in list(nickserv_entries.values()):
+                    for groupnicks in list(server_context.nickserv_entries.values()):
                         if self._nickname.lower() in groupnicks.grouped_nicknames:
                             grouped_nick = True
                             break
 
-                    if self._nickname.lower() in nickserv_entries or grouped_nick == True:
+                    if self._nickname.lower() in server_context.nickserv_entries or grouped_nick == True:
                         self.send(":%s!%s@%s %s %s :Error: That nickname has already been registered\r\n" %
                                   ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
 
@@ -5680,7 +5213,7 @@ def Nickserv_function(self, param, msgtype=""):
 
                         writehash = sha256((passw + NickservParam).encode('utf-8'))
 
-                        nickserv_entries[self._nickname.lower()] = NickServEntry(self._nickname, writehash.hexdigest(
+                        server_context.nickserv_entries[self._nickname.lower()] = NickServEntry(self._nickname, writehash.hexdigest(
                         ), emaila, GetEpochTime(), self.details[0], "", olevel, False)  # add to the nickname database
 
                         self.send(
@@ -5789,16 +5322,16 @@ def Nickserv_function(self, param, msgtype=""):
                 else:
                     passw = param[2]
                     grouped_nick = None
-                    for groupnicks in list(nickserv_entries.values()):
+                    for groupnicks in list(server_context.nickserv_entries.values()):
                         if self._nickname.lower() in groupnicks.grouped_nicknames:
                             grouped_nick = groupnicks
                             break
 
-                    if self._nickname.lower() in nickserv_entries or grouped_nick != None:
+                    if self._nickname.lower() in server_context.nickserv_entries or grouped_nick != None:
                         if grouped_nick != None:
                             ns = grouped_nick
                         else:
-                            ns = nickserv_entries[self._nickname.lower()]
+                            ns = server_context.nickserv_entries[self._nickname.lower()]
 
                         writehash1 = sha256((passw + NickservParam).encode('utf-8'))
 
@@ -5836,16 +5369,16 @@ def Nickserv_function(self, param, msgtype=""):
                 passw = param[3]
 
                 groupnick = None
-                for groupnicks in list(nickserv_entries.values()):
+                for groupnicks in list(server_context.nickserv_entries.values()):
                     if nickn.lower() in groupnicks.grouped_nicknames:
                         groupnick = groupnicks
                         break
 
-                if nickn.lower() in nickserv_entries or groupnick:
+                if nickn.lower() in server_context.nickserv_entries or groupnick:
                     if groupnick:
                         ns = groupnick
                     else:
-                        ns = nickserv_entries[nickn.lower()]
+                        ns = server_context.nickserv_entries[nickn.lower()]
 
                     writehash1 = sha256((passw + NickservParam).encode('utf-8'))
 
@@ -5911,16 +5444,16 @@ def Nickserv_function(self, param, msgtype=""):
             try:
                 nickn = param[2]
                 grouped_nick = None
-                for groupnicks in list(nickserv_entries.values()):
+                for groupnicks in list(server_context.nickserv_entries.values()):
                     if nickn.lower() in groupnicks.grouped_nicknames:
                         grouped_nick = groupnicks
                         break
 
-                if nickn.lower() in nickserv_entries or grouped_nick != None:
+                if nickn.lower() in server_context.nickserv_entries or grouped_nick != None:
                     if grouped_nick != None:
                         ns = grouped_nick
                     else:
-                        ns = nickserv_entries[nickn.lower()]
+                        ns = server_context.nickserv_entries[nickn.lower()]
 
                     self.send(":%s!%s@%s %s %s :\x02Nickname Information\x02 for %s\r\n" %
                               ("NickServ", "NickServ", NetworkName, replyType, self._nickname, ns._nickname))
@@ -5979,9 +5512,9 @@ def Nickserv_function(self, param, msgtype=""):
                     self.send(":%s!%s@%s %s %s :SET <nickname> \x02SHOWEMAIL\x02 \x1Fon/off\x1F\r\n" %
                               ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
 
-                elif nickn.lower() in nickserv_entries:
+                elif nickn.lower() in server_context.nickserv_entries:
                     option = param[3].upper()
-                    nid = nickserv_entries[nickn.lower()]
+                    nid = server_context.nickserv_entries[nickn.lower()]
 
                     try:
                         value = param[4]
@@ -6052,8 +5585,8 @@ def Nickserv_function(self, param, msgtype=""):
 
                     elif option == "PASSWORD":
                         value1 = param[5]
-                        if nickn.lower() in nickserv_entries:
-                            nid = nickserv_entries[nickn.lower()]
+                        if nickn.lower() in server_context.nickserv_entries:
+                            nid = server_context.nickserv_entries[nickn.lower()]
 
                             writehash1 = sha256((value + NickservParam).encode('utf-8'))
                             writehash2 = sha256((value1 + NickservParam).encode('utf-8'))
@@ -6088,8 +5621,8 @@ def Nickserv_function(self, param, msgtype=""):
 
         elif param[1] == "UNGROUP":  # NS GROUP nickname <password>
             try:
-                if param[2].lower() in nickserv_entries:
-                    nid = nickserv_entries[param[2].lower()]
+                if param[2].lower() in server_context.nickserv_entries:
+                    nid = server_context.nickserv_entries[param[2].lower()]
 
                     writehash1 = sha256((param[3] + NickservParam).encode('utf-8'))
                     if writehash1.hexdigest() == nid._password:
@@ -6116,8 +5649,8 @@ def Nickserv_function(self, param, msgtype=""):
 
         elif param[1] == "GROUP":  # NS GROUP nickname <password>
             try:
-                if param[2].lower() in nickserv_entries:
-                    nid = nickserv_entries[param[2].lower()]
+                if param[2].lower() in server_context.nickserv_entries:
+                    nid = server_context.nickserv_entries[param[2].lower()]
                     writehash1 = sha256((param[3] + NickservParam).encode('utf-8'))
                     if writehash1.hexdigest() == nid._password:
                         if len(nid.grouped_nicknames) == 2:
@@ -6125,7 +5658,7 @@ def Nickserv_function(self, param, msgtype=""):
                                       ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
                         else:
                             grouped_already = False
-                            for groupnicks in list(nickserv_entries.values()):
+                            for groupnicks in list(server_context.nickserv_entries.values()):
                                 if self._nickname.lower() in groupnicks.grouped_nicknames:
                                     self.send(
                                         ":%s!%s@%s %s %s :Error: This nickname is already grouped/registered\r\n" %
@@ -6175,7 +5708,7 @@ def Nickserv_function(self, param, msgtype=""):
                     passw = ""
 
                 grouped_nick = False
-                for groupnicks in list(nickserv_entries.values()):
+                for groupnicks in list(server_context.nickserv_entries.values()):
                     if nickn.lower() in groupnicks.grouped_nicknames:
                         grouped_nick = True
                         self.send(
@@ -6184,8 +5717,8 @@ def Nickserv_function(self, param, msgtype=""):
                         break
 
                 if grouped_nick == False:
-                    if nickn.lower() in nickserv_entries:
-                        ns = nickserv_entries[nickn.lower()]
+                    if nickn.lower() in server_context.nickserv_entries:
+                        ns = server_context.nickserv_entries[nickn.lower()]
 
                         writehash1 = sha256((passw + NickservParam).encode('utf-8'))
 
@@ -6218,7 +5751,7 @@ def Nickserv_function(self, param, msgtype=""):
                                             cid.send(":%s!%s@%s %s %s :Your nickname has been dropped\r\n" %
                                                      ("NickServ", "NickServ", NetworkName, replyType, cid._nickname))
 
-                                del nickserv_entries[nickn.lower()]
+                                del server_context.nickserv_entries[nickn.lower()]
                                 WriteUsers(True, False)
                                 self.send(":%s!%s@%s %s %s :The nickname \x02%s\x02 has been dropped\r\n" %
                                           (
@@ -6300,7 +5833,7 @@ def settings():  # this is information such as channels, max users etc
                     if "r" in s_modes:
                         chanclass._prop.registered = server_context.configuration.server_name
                     if s_founder != "":
-                        _founder = _Access.CreateMaskString(s_founder, True)
+                        _founder = access_helper.CreateMaskString(s_founder, True)
 
                     chanclass._founder = _founder
                     chanclass._topic = s_topic
@@ -6311,15 +5844,13 @@ def settings():  # this is information such as channels, max users etc
                     chanclass.ChannelAccess = loads(decompress(s_ax.strip()))
                     chanclass._prop = loads(decompress(s_prop))
                     if s_founder != "":
-                        _addrec = _Access.AddRecord("", chanclass.channelname.lower(), "OWNER", _founder, 0, "")
-
-    global ServerAccess
+                        _addrec = access_helper.AddRecord("", chanclass.channelname.lower(), "OWNER", _founder, 0, "")
 
     myfile = open('pyRCX/database/access.dat', 'rb')
     try:
-        ServerAccess = loads(myfile.read())
+        server_context.server_access_entries = loads(myfile.read())
     except EOFError:
-        ServerAccess = []
+        server_context.server_access_entries = []
 
     myfile.close()
 
