@@ -1,9 +1,7 @@
 import logging
 import time
-from typing import Dict, Set
 
-from pyRCX.clientbase import ClientBaseClass
-from pyRCX.operator import OperatorEntry
+from pyRCX.server_context import ServerContext
 
 
 class Statistics:
@@ -15,16 +13,13 @@ class Statistics:
 
     server_launch = time.strftime(" :On-line since %A %B %d %H:%M:%S %Y", time.localtime())
 
-    def __init__(self, nickname_to_client_mapping_entries: Dict[str, ClientBaseClass],
-                 operator_entries: Dict[str, OperatorEntry], invisible_client_entries: Set[ClientBaseClass],
-                 secret_client_entries: Set[ClientBaseClass], unknown_connection_entries: Set[ClientBaseClass],
-                 channel_entries: Dict):
-        self._invisible_client_entries = invisible_client_entries
-        self._nickname_to_client_mapping_entries = nickname_to_client_mapping_entries
-        self._operator_entries = operator_entries
-        self._secret_client_entries = secret_client_entries
-        self._unknown_connection_entries = unknown_connection_entries
-        self._channel_entries = channel_entries
+    def __init__(self, server_context: ServerContext):
+        self._invisible_client_entries = server_context.invisible_client_entries
+        self._nickname_to_client_mapping_entries = server_context.nickname_to_client_mapping_entries
+        self._operator_entries = server_context.operator_entries
+        self._secret_client_entries = server_context.secret_client_entries
+        self._unknown_connection_entries = server_context.unknown_connection_entries
+        self._channel_entries = server_context.channel_entries
         self._max_local = len(self._nickname_to_client_mapping_entries)
 
         self.logger = logging.getLogger('STATISTICS')
