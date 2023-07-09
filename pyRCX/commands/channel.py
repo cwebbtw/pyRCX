@@ -3,6 +3,7 @@ from random import random
 from typing import Dict, List
 
 from pyRCX.channel import Channel
+from pyRCX.commands.command import Command
 from pyRCX.configuration import Configuration
 from pyRCX.operator import OperatorEntry
 from pyRCX.raw import Raw
@@ -10,7 +11,24 @@ from pyRCX.server_context import ServerContext
 from pyRCX.user import User
 
 
-class JoinCommand:
+class PartCommand(Command):
+
+    def __init__(self, server_context: ServerContext,
+                 raw_messages: Raw):
+        self._server_context = server_context
+        self._raw_messages = raw_messages
+
+    def execute(self, user: User, parameters: List[str]):
+
+        for channel_name in parameters[0].split(","):
+            chan = self._server_context.get_channel(channel_name)
+            if chan:
+                chan.part(user._nickname)
+            else:
+                self._raw_messages.raw(user, "403", user._nickname, channel_name)
+
+
+class JoinCommand(Command):
     def __init__(self, server_context: ServerContext,
                  raw_messages: Raw):
 

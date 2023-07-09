@@ -17,7 +17,7 @@ from zlib import compress, decompress
 
 from .access import AccessInformation
 from .channel import Channel
-from .commands.channel import JoinCommand
+from .commands.channel import JoinCommand, PartCommand
 from .filtering import FilterEntry, Filtering
 from .nickserv import NickServEntry
 from .operator import OperatorEntry
@@ -42,6 +42,7 @@ raw_messages = Raw(server_context.configuration, statistics, disabled_functional
 
 # Commands
 join_command: JoinCommand = JoinCommand(server_context, raw_messages)
+part_command: PartCommand = PartCommand(server_context, raw_messages)
 # Here are some settings, these can be coded into the conf later I suppose
 
 character_encoding = "latin1"
@@ -2019,17 +2020,6 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                         else:
                                             raw_messages.raw(self, "403", self._nickname, param[2])
 
-                                elif param[0] == "PART":
-                                    iloop = 0
-                                    while iloop < len(param[1].split(",")):
-                                        chan = getChannelOBJ(param[1].split(",")[iloop].lower())
-                                        if chan:
-                                            chan.part(self._nickname)
-                                        else:
-                                            raw_messages.raw(self, "403", self._nickname, param[1].split(",")[iloop])
-
-                                        iloop += 1
-
                                 elif param[0] == "NAMES":
                                     if chanid:
                                         chanid.sendnames(self._nickname)  # send when requested
@@ -3123,6 +3113,9 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                 elif param[0] == "JOIN":
                                     join_command.execute(self, param[1:])
+
+                                elif param[0] == "PART":
+                                    part_command.execute(self, param[1:])
 
                                 elif param[0] == "FINDS":
                                     if chanid:
