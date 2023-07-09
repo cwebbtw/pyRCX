@@ -3,6 +3,7 @@ import threading
 import time
 from copy import copy
 
+from .helpers import int_or_zero
 from .prop import Prop
 from .raw import Raw
 from .server_context import ServerContext
@@ -153,9 +154,6 @@ class Channel:
                     (cclientid._nickname, cclientid._username, cclientid._hostmask, channelname))
                 self.sendnames(cclientid._nickname, True)
 
-    def int_or_zero(self, value):
-        return int(value) if value.isdigit() else 0
-
     def has_channel_permissions(self, nickname):  # return true or false depending upon whether nick is oper
         if nickname.lower() in self._op or nickname.lower() in self._owner or self._server_context.get_operator(
                 nickname):
@@ -222,15 +220,15 @@ class Channel:
         if "u" in creationmodes:
             self.MODE_knock = True
         if "l" in creationmodes or "k" in creationmodes:
-            data_limit = str(self.int_or_zero(creationmodes_full.split(" ")[1]))
+            data_limit = str(int_or_zero(creationmodes_full.split(" ")[1]))
             data_key = creationmodes_full.split(" ")[1]
             if "l" in creationmodes and "k" in creationmodes:
                 if creationmodes.find("l") > creationmodes.find("k"):
                     data_key = creationmodes_full.split(" ")[1]
-                    data_limit = str(self.int_or_zero(creationmodes_full.split(" ")[2]))
+                    data_limit = str(int_or_zero(creationmodes_full.split(" ")[2]))
                 else:
                     data_key = creationmodes_full.split(" ")[2]
-                    data_limit = str(self.int_or_zero(creationmodes_full.split(" ")[1]))
+                    data_limit = str(int_or_zero(creationmodes_full.split(" ")[1]))
 
             if "l" in creationmodes:
                 self.MODE_limit = True
@@ -395,6 +393,9 @@ class Channel:
     def should_send_names(self):
         return self.MODE_secret or self.MODE_servicechan or self.MODE_hidden or self.MODE_private
 
+    def visible_in_list(self):
+        return not self.MODE_secret and not self.MODE_private
+
     def sendnames(self, nick, owner=False, sendwatch=False):
         cclientid = self._server_context.get_user(nick)
         str_chanlist = ""
@@ -535,7 +536,7 @@ class Channel:
                     haskey = True
 
             if self.MODE_limit:
-                if len(self._users) >= self.int_or_zero(
+                if len(self._users) >= int_or_zero(
                         self.MODE_limitamount) and nick.lower() not in self._operator_entries and haskey == False:
                     return -3
 

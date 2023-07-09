@@ -18,6 +18,7 @@ from zlib import compress, decompress
 from .access import AccessInformation
 from .channel import Channel
 from .commands.channel import JoinCommand, PartCommand
+from .commands.list import ListCommand
 from .filtering import FilterEntry, Filtering
 from .nickserv import NickServEntry
 from .operator import OperatorEntry
@@ -43,6 +44,7 @@ raw_messages = Raw(server_context.configuration, statistics, disabled_functional
 # Commands
 join_command: JoinCommand = JoinCommand(server_context, raw_messages)
 part_command: PartCommand = PartCommand(server_context, raw_messages)
+list_command: ListCommand = ListCommand(server_context, raw_messages)
 # Here are some settings, these can be coded into the conf later I suppose
 
 character_encoding = "latin1"
@@ -2049,93 +2051,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                     raw_messages.raw(self, "323", self._nickname)
 
                                 elif param[0] == "LIST" or param[0] == "LISTX":
-                                    try:
-                                        raw_messages.raw(self, "321", self._nickname)
-                                        for chanid in getGlobalChannels():
-                                            chanusers = str(len(chanid._users) - len(chanid._watch))
-                                            if chanid.MODE_auditorium and self._nickname.lower() not in server_context.operator_entries and isOp(
-                                                    self._nickname.lower(), chanid.channelname) == False:
-                                                chanusers = str((len(chanid._op) + len(chanid._owner)))
-
-                                            if isSecret(chanid, "hidden"):
-                                                if self._nickname.lower() in chanid._users or self._nickname.lower() in server_context.operator_entries:
-                                                    raw_messages.raw(self, "322", self._nickname,
-                                                                     chanid.channelname, chanusers, chanid._topic)
-                                            else:
-                                                if param[0] == "LISTX" and len(param) == 2:
-
-                                                    if "<" in param[1]:
-                                                        if len(param[1].split("<")) == 2:
-                                                            lowerthanparam = param[1].split("<")[1].split(",")[0]
-                                                        if myint(chanusers) < myint(lowerthanparam):
-                                                            raw_messages.raw(self, "322", self._nickname,
-                                                                             chanid.channelname, chanusers,
-                                                                             chanid._topic)
-
-                                                    elif ">" in param[1]:
-                                                        if len(param[1].split(">")) == 2:
-                                                            lowerthanparam = param[1].split(">")[1].split(",")[0]
-                                                        if myint(chanusers) > myint(lowerthanparam):
-                                                            raw_messages.raw(self, "322", self._nickname,
-                                                                             chanid.channelname, chanusers,
-                                                                             chanid._topic)
-                                                    elif "R=0" == param[1]:
-                                                        if chanid.MODE_registered == False:
-                                                            raw_messages.raw(self, "322", self._nickname,
-                                                                             chanid.channelname, chanusers,
-                                                                             chanid._topic)
-
-                                                    elif "IRCX=0" == param[1]:
-                                                        if chanid.MODE_noircx:
-                                                            raw_messages.raw(self, "322", self._nickname,
-                                                                             chanid.channelname, chanusers,
-                                                                             chanid._topic)
-
-                                                    elif "IRCX=1" == param[1]:
-                                                        if chanid.MODE_noircx == False:
-                                                            raw_messages.raw(self, "322", self._nickname,
-                                                                             chanid.channelname, chanusers,
-                                                                             chanid._topic)
-
-                                                    elif "R=1" == param[1]:
-                                                        if chanid.MODE_registered:
-                                                            raw_messages.raw(self, "322", self._nickname,
-                                                                             chanid.channelname, chanusers,
-                                                                             chanid._topic)
-
-                                                    elif "N=" in param[1]:
-                                                        try:
-                                                            matchstring = param[1].split("=", 1)[1].lower()
-                                                            if matchstring in chanid.channelname.lower():
-                                                                raw_messages.raw(self, "322", self._nickname,
-                                                                                 chanid.channelname, chanusers,
-                                                                                 chanid._topic)
-
-                                                        except:
-                                                            pass
-
-                                                    elif "T=" in param[1]:
-                                                        try:
-                                                            matchstring = param[1].split("=", 1)[1].lower()
-                                                            if matchstring in chanid._topic.lower():
-                                                                raw_messages.raw(self, "322", self._nickname,
-                                                                                 chanid.channelname, chanusers,
-                                                                                 chanid._topic)
-
-                                                        except:
-                                                            pass
-
-                                                    else:
-                                                        raw_messages.raw(self, "322", self._nickname,
-                                                                         chanid.channelname, chanusers, chanid._topic)
-
-                                                else:
-                                                    raw_messages.raw(self, "322", self._nickname,
-                                                                     chanid.channelname, chanusers, chanid._topic)
-                                    except:
-                                        pass
-
-                                    raw_messages.raw(self, "323", self._nickname)
+                                    list_command.execute(self, param)
 
                                 elif param[0] == "ACCESS":
                                     if chanid:
@@ -3109,10 +3025,10 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                     raw_messages.raw(self, "705", self._nickname, param[1])
 
                                 elif param[0] == "JOIN":
-                                    join_command.execute(self, param[1:])
+                                    join_command.execute(self, param)
 
                                 elif param[0] == "PART":
-                                    part_command.execute(self, param[1:])
+                                    part_command.execute(self, param)
 
                                 elif param[0] == "FINDS":
                                     if chanid:

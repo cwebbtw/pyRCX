@@ -20,7 +20,7 @@ class PartCommand(Command):
 
     def execute(self, user: User, parameters: List[str]):
 
-        for channel_name in parameters[0].split(","):
+        for channel_name in parameters[1].split(","):
             chan = self._server_context.get_channel(channel_name)
             if chan:
                 chan.part(user._nickname)
@@ -40,12 +40,7 @@ class JoinCommand(Command):
         self._nickname_to_client_mapping_entries: Dict[str, User] = server_context.nickname_to_client_mapping_entries
 
     def execute(self, user: User, parameters: List[str]):
-
-        # TODO what?!
-        _sleep = "%.4f" % (random() / 9)
-        time.sleep(float(_sleep))
-
-        for channel_name in parameters[0].split(","):
+        for channel_name in parameters[1].split(","):
 
             if user.has_reached_max_channels():
                 self._raw_messages.raw(user, "405", user._nickname, channel_name)
@@ -53,20 +48,20 @@ class JoinCommand(Command):
                 channel = self._channel_entries.get(channel_name.lower(), None)
                 if channel:
                     if channel.MODE_key != "":
-                        if len(parameters) > 1:
-                            if parameters[1] == channel.MODE_key:
-                                channel.join(user._nickname, parameters[1])
-                            elif parameters[1] == channel._prop.ownerkey:
+                        if len(parameters) > 2:
+                            if parameters[2] == channel.MODE_key:
+                                channel.join(user._nickname, parameters[2])
+                            elif parameters[2] == channel._prop.ownerkey:
                                 if user._nickname.lower() not in channel._owner:
                                     if user._nickname.lower() not in channel._users:
                                         channel._owner.append(user._nickname.lower())
 
-                                channel.join(user._nickname, parameters[1])
+                                channel.join(user._nickname, parameters[2])
 
-                            elif parameters[1] == channel._prop.hostkey:
+                            elif parameters[2] == channel._prop.hostkey:
                                 if user._nickname.lower() not in channel._op and user._nickname.lower() not in channel._users:
                                     channel._op.append(user._nickname.lower())
-                                channel.join(user._nickname, parameters[1])
+                                channel.join(user._nickname, parameters[2])
 
                             else:
                                 # send error to  user
@@ -97,16 +92,16 @@ class JoinCommand(Command):
                                          channel.channelname))
 
 
-                    elif len(parameters) > 1:
-                        if parameters[1] == channel._prop.ownerkey:
+                    elif len(parameters) > 2:
+                        if parameters[2] == channel._prop.ownerkey:
                             if user._nickname.lower() not in channel._owner and user._nickname.lower() not in channel._users:
                                 channel._owner.append(user._nickname.lower())
 
-                        elif parameters[1] == channel._prop.hostkey:
+                        elif parameters[2] == channel._prop.hostkey:
                             if user._nickname.lower() not in channel._op and user._nickname.lower() not in channel._users:
                                 channel._op.append(user._nickname.lower())
 
-                        channel.join(user._nickname, parameters[1])
+                        channel.join(user._nickname, parameters[2])
                     else:
                         channel.join(user._nickname)
                 else:
