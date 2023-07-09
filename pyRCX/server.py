@@ -58,9 +58,6 @@ ipaddress = ""
 PrefixChar = ""
 AdminPassword = ""
 ServerAddress = ""
-NetworkName = ""
-ServerAdmin1 = ""
-ServerAdmin2 = ""
 ServerPassword = ""
 passmsg = ""
 MaxUsers = 10
@@ -143,9 +140,9 @@ def WriteUsers(nicksv=True, chans=True, access=False):
 def rehash(par=1):  # this information will be rehashed by any operator with level 4 privlidges (Administrator)
     myfile = open(server_context.configuration.server_config_file, "r")
     try:
-        global ServerAddress, server_name, NetworkName, connectionsExempt, operlines, Ports
+        global ServerAddress, connectionsExempt, operlines, Ports
         global MaxUsers, MaxUsersPerConnection, NickfloodAmount, NickfloodWait
-        global NickservParam, ipaddress, ServerAdmin1, ServerAdmin2, AdminPassword, ServerPassword
+        global NickservParam, ipaddress, AdminPassword, ServerPassword
         global passmsg, HostMaskingParam, HostMasking, PrefixChar, MaxServerEntries, MaxChannelEntries, MaxUserEntries
         global defconMode, UserDefaultModes
 
@@ -167,7 +164,7 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
 
                 ServerAddress = s_line[1]
                 server_context.configuration.server_name = s_line[2]
-                NetworkName = s_line[3].split(";")[0]
+                server_context.configuration.network_name = s_line[3].split(";")[0]
 
             if lineStr[0] == "E":
                 s_line = lineStr.split(":")
@@ -201,8 +198,8 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
 
             if lineStr[0] == "A":
                 s_line = lineStr.split(":")
-                ServerAdmin1 = s_line[1]
-                ServerAdmin2 = s_line[2]
+                server_context.configuration.server_admin_name = s_line[1]
+                server_context.configuration.server_admin_organisation = s_line[2]
                 AdminPassword = s_line[3].split(";")[0]
 
             if lineStr[0] == "P":
@@ -680,18 +677,18 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
         server_context.unknown_connection_entries.remove(self)
 
-        raw_messages.raw(self, "001", self._nickname, NetworkName)
-        raw_messages.raw(self, "002", self._nickname, server_context.configuration.server_name)
+        raw_messages.raw(self, "001", self._nickname)
+        raw_messages.raw(self, "002", self._nickname)
         raw_messages.raw(self, "003", self._nickname)
-        raw_messages.raw(self, "004", self._nickname, NetworkName)
-        raw_messages.raw(self, "005", self._nickname, NetworkName)
+        raw_messages.raw(self, "004", self._nickname)
+        raw_messages.raw(self, "005", self._nickname)
         self._sendlusers()
         self._sendmotd(f"./{server_context.configuration.motd_config_file}")
 
         if self._MODE_register:
             self._MODE_register = False
             self._MODE_.replace("r", "")
-            self.send(":%s!%s@%s MODE %s -r\r\n" % ("NickServ", "NickServ", NetworkName, self._nickname))
+            self.send(":%s!%s@%s MODE %s -r\r\n" % ("NickServ", "NickServ", server_context.configuration.network_name, self._nickname))
             if self._username[0] != PrefixChar and self._nickname.lower() not in server_context.operator_entries:
                 self._username = PrefixChar + self._username
 
@@ -705,14 +702,14 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
         if self._nickname.lower() in server_context.nickserv_entries and self._nickname.lower() in server_context.nickname_to_client_mapping_entries and self._nosendnickserv == False:
             self.send(
                 ":%s!%s@%s NOTICE %s :That nickname is owned by somebody else\r\n:%s!%s@%s NOTICE %s :If this is your nickname, you can identify with \x02/nickserv IDENTIFY \x1Fpassword\x1F\x02\r\n" %
-                ("NickServ", "NickServ", NetworkName, self._nickname, "NickServ", "NickServ", NetworkName,
+                ("NickServ", "NickServ", server_context.configuration.network_name, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name,
                  self._nickname))
             is_groupednick = False
 
         if is_groupednick:
             self.send(
                 ":%s!%s@%s NOTICE %s :That nickname is owned by somebody else\r\n:%s!%s@%s NOTICE %s :If this is your nickname, you can identify with \x02/nickserv IDENTIFY \x1Fpassword\x1F\x02\r\n" %
-                ("NickServ", "NickServ", NetworkName, self._nickname, "NickServ", "NickServ", NetworkName,
+                ("NickServ", "NickServ", server_context.configuration.network_name, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name,
                  self._nickname))
 
         # UserDefaultModes
@@ -1503,7 +1500,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                             for each in server_context.nickname_to_client_mapping_entries:
                                                 cid = server_context.nickname_to_client_mapping_entries[each.lower()]
                                                 cid.send(
-                                                    ":" + NetworkName + " NOTICE " + cid._nickname + " :" +
+                                                    ":" + server_context.configuration.network_name + " NOTICE " + cid._nickname + " :" +
                                                     strdata.split(" ", 1)[1] + "\r\n")
 
                                         else:
@@ -3171,7 +3168,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                     raw_messages.raw(self, "391", self._nickname)
 
                                 elif param[0] == "INFO":
-                                    raw_messages.raw(self, "371", self._nickname, NetworkName)
+                                    raw_messages.raw(self, "371", self._nickname)
                                     raw_messages.raw(self, "374", self._nickname)
 
                                 elif param[0] == "GENPASS":
@@ -3365,7 +3362,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                 raw_messages.raw(self, "313", self._nickname, _whoisuser,
                                                                  _whoisuser._MODE_)
                                                 raw_messages.raw(self, "320", self._nickname, _whoisuser)
-                                                raw_messages.raw(self, "312", self._nickname, _whoisuser, NetworkName)
+                                                raw_messages.raw(self, "312", self._nickname, _whoisuser)
                                                 if _whoisuser._away != "":
                                                     raw_messages.raw(self, "301", self._nickname, _whoisuser,
                                                                      _whoisuser._away)
@@ -3377,9 +3374,9 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                         elif _whois.lower() == "nickserv":
                                             self.send(
                                                 ":%s!%s@%s %s %s :\x02pyRCX nickname services\x02 (currently %d registered users)\r\n:%s!%s@%s %s %s :Type \x1F/nickserv HELP\x1F for more information\r\n" % (
-                                                    "NickServ", "NickServ", NetworkName, "NOTICE", self._nickname,
+                                                    "NickServ", "NickServ", server_context.configuration.network_name, "NOTICE", self._nickname,
                                                     len(server_context.nickserv_entries), "NickServ", "NickServ",
-                                                    NetworkName,
+                                                    server_context.configuration.network_name,
                                                     "NOTICE", self._nickname))
 
                                         else:
@@ -3390,11 +3387,11 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                     raw_messages.raw(self, "318", self._nickname, param[1])
 
                                 elif param[0] == "ADMIN":
-                                    raw_messages.raw(self, "258", self._nickname, ServerAdmin1)
-                                    raw_messages.raw(self, "259", self._nickname, ServerAdmin2)
+                                    raw_messages.raw(self, "258", self._nickname)
+                                    raw_messages.raw(self, "259", self._nickname)
 
                                 elif param[0] == "VERSION":
-                                    raw_messages.raw(self, "256", self._nickname, NetworkName)
+                                    raw_messages.raw(self, "256", self._nickname)
                                     raw_messages.raw(self, "257", self._nickname)
 
                                 elif param[0] == "LUSERS":
@@ -3650,7 +3647,7 @@ def Oper_function(self, param):
                         self._username = self._username[1:]
 
                     if "s" not in opid.flags:
-                        self._hostmask = NetworkName
+                        self._hostmask = server_context.configuration.network_name
                         self._username = opid.username
 
                     self._sendmotd("./" + opid.filename)
@@ -3853,7 +3850,7 @@ def Nick_function(self: ClientConnecting, param):
                             self._MODE_register = False
                             self._MODE_.replace("r", "")
                             self.send(":%s!%s@%s MODE %s -r\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, self._nickname))
                             if self._username[
                                 0] != PrefixChar and self._nickname.lower() not in server_context.operator_entries:
                                 self._username = PrefixChar + self._username
@@ -3862,8 +3859,8 @@ def Nick_function(self: ClientConnecting, param):
                             if self._MODE_register == False:
                                 self.send(
                                     ":%s!%s@%s NOTICE %s :That nickname is owned by somebody else\r\n:%s!%s@%s NOTICE %s :If this is your nickname, you can identify with \x02/nickserv IDENTIFY \x1Fpassword\x1F\x02\r\n" % (
-                                        "NickServ", "NickServ", NetworkName, self._nickname, "NickServ", "NickServ",
-                                        NetworkName, self._nickname))
+                                        "NickServ", "NickServ", server_context.configuration.network_name, self._nickname, "NickServ", "NickServ",
+                                        server_context.configuration.network_name, self._nickname))
 
                 else:
                     raw_messages.raw(self, "433", self._nickname, temp_nick)
@@ -5154,19 +5151,19 @@ def Nickserv_function(self, param, msgtype=""):
             try:
                 if self._MODE_register == True:
                     self.send(":%s!%s@%s %s %s :Error: You are already registered\r\n" %
-                              ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                              ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                 elif self._nickname.lower() not in server_context.operator_entries and (
                         (self._signontime - GetEpochTime()) < -300) == False and defconMode == 2:
                     self.send(
                         ":%s!%s@%s %s %s :Error: NickServ requires you to stay on this server a minimum amount of time before registering your nickname\r\n"
-                        % ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                        % ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                     sendNickservOpers(
                         "Notice -- \x02NickServ\x02 - (%s!%s@%s) [%s] has tried to registered their nickname (not online long enough, defcon 2 is active)\r\n"
                         % (self._nickname, self._username, self._hostmask, self.details[0]))
                 elif self._nickname.lower() not in server_context.operator_entries and defconMode == 3:
                     self.send(
                         ":%s!%s@%s %s %s :Error: NickServ will not allow nicknames to be registered at this time\r\n" %
-                        ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                        ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                     sendNickservOpers(
                         "Notice -- \x02NickServ\x02 - (%s!%s@%s) [%s] has tried to registered their nickname (nickserv disabled, defcon 3 is active)\r\n"
                         % (self._nickname, self._username, self._hostmask, self.details[0]))
@@ -5205,12 +5202,12 @@ def Nickserv_function(self, param, msgtype=""):
 
                     if self._nickname.lower() in server_context.nickserv_entries or grouped_nick == True:
                         self.send(":%s!%s@%s %s %s :Error: That nickname has already been registered\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
                     elif toomanynicks >= 1 and exemptFromConnectionKiller == False:
                         self.send(
                             ":%s!%s@%s %s %s :Error: You can only register one nickname, you can group nicknames though\r\n" %
-                            ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                            ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                     else:
                         olevel = 0
                         if self._nickname.lower() in server_context.operator_entries:
@@ -5229,11 +5226,11 @@ def Nickserv_function(self, param, msgtype=""):
 
                         self.send(
                             ":%s!%s@%s %s %s :\x02Registration complete\x02\r\n:%s!%s@%s %s %s :Your nickname has been registered with the address *@%s\r\n" % (
-                                "NickServ", "NickServ", NetworkName, replyType, self._nickname, "NickServ", "NickServ",
-                                NetworkName, replyType, self._nickname, self._hostmask))
+                                "NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, "NickServ", "NickServ",
+                                server_context.configuration.network_name, replyType, self._nickname, self._hostmask))
                         self.send(
                             ":%s!%s@%s %s %s :Your password is \x02%s\x02, please remember to keep this safe\r\n" %
-                            ("NickServ", "NickServ", NetworkName, replyType, self._nickname, passw))
+                            ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, passw))
                         self._MODE_register = True
 
                         WriteUsers(True, False)
@@ -5241,7 +5238,7 @@ def Nickserv_function(self, param, msgtype=""):
                             self._username = self._username[1:]
                         if "r" not in self._MODE_:
                             self._MODE_ += "r"
-                        self.send(":%s!%s@%s MODE %s +r\r\n" % ("NickServ", "NickServ", NetworkName, self._nickname))
+                        self.send(":%s!%s@%s MODE %s +r\r\n" % ("NickServ", "NickServ", server_context.configuration.network_name, self._nickname))
                         sendNickservOpers(
                             "Notice -- \x02NickServ\x02 - (%s!%s@%s) [%s] has registered their nickname\r\n" %
                             (self._nickname, self._username, self._hostmask, self.details[0]))
@@ -5249,11 +5246,11 @@ def Nickserv_function(self, param, msgtype=""):
             except Exception as exception:
                 logger.debug(exception)
                 self.send(":%s!%s@%s %s %s :Syntax: \x02REGISTER \x1Fpassword\x1F \x1Femail\x1F\x02\r\n" %
-                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
         elif param[1] == "HELLO":
             self.send(":%s!%s@%s %s %s :hello to you too!\r\n" %
-                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
         elif param[1] == "IPLOCK":
             if len(param) == 2:
@@ -5263,7 +5260,7 @@ def Nickserv_function(self, param, msgtype=""):
                     methodIS = "\x02On\x02"
 
                 self.send(":%s!%s@%s %s %s :IPLOCK is currently %s\r\n" %
-                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname, methodIS))
+                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, methodIS))
             else:
                 if self._nickname.lower() in server_context.operator_entries:
                     opid = server_context.operator_entries[self._nickname.lower()]
@@ -5276,25 +5273,25 @@ def Nickserv_function(self, param, msgtype=""):
                             defconDesc = "allow nicknames to be registered regardless of whether their IP has registered before \x02(low protection)\x02"
                         else:
                             self.send(":%s!%s@%s %s %s :No such IPLOCK mode\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                             return
 
                         self.send(":%s!%s@%s %s %s :NickServ will now %s\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname, defconDesc))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, defconDesc))
                         sendNickservOpers(
                             "Notice -- \x02NickServ\x02 - IPLOCK changed by %s, NickServ will now %s\r\n" %
                             (self._nickname, defconDesc))
                     else:
                         self.send(":%s!%s@%s %s %s :Error: Access denied\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                 else:
                     self.send(":%s!%s@%s %s %s :Error: Access denied\r\n" %
-                              ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                              ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
         elif param[1] == "DEFCON":
             if len(param) == 2:
                 self.send(":%s!%s@%s %s %s :DEFCON is currently operating on level %d\r\n" %
-                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname, globals()["defconMode"]))
+                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, globals()["defconMode"]))
             else:
                 if self._nickname.lower() in server_context.operator_entries:
                     opid = server_context.operator_entries[self._nickname.lower()]
@@ -5310,26 +5307,26 @@ def Nickserv_function(self, param, msgtype=""):
                             defconDesc = "disallow any new registrations \x02(disabled)\x02"
                         else:
                             self.send(":%s!%s@%s %s %s :No such DEFCON level available\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                             return
 
                         self.send(":%s!%s@%s %s %s :NickServ will now %s\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname, defconDesc))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, defconDesc))
                         sendNickservOpers(
                             "Notice -- \x02NickServ\x02 - DEFCON changed by %s, NickServ will now %s\r\n" %
                             (self._nickname, defconDesc))
                     else:
                         self.send(":%s!%s@%s %s %s :Error: Access denied\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                 else:
                     self.send(":%s!%s@%s %s %s :Error: Access denied\r\n" %
-                              ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                              ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
         elif param[1] == "IDENTIFY":
             try:
                 if self._MODE_register:
                     self.send(":%s!%s@%s %s %s :Error: You are already identified\r\n" %
-                              ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                              ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                 else:
                     passw = param[2]
                     grouped_nick = None
@@ -5354,25 +5351,25 @@ def Nickserv_function(self, param, msgtype=""):
                             if self._username[0] == PrefixChar:
                                 self._username = self._username[1:]
                             self.send(":%s!%s@%s MODE %s +r\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, self._nickname))
                             self.send(":%s!%s@%s %s %s :Welcome back %s\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, self._nickname))
 
                             if ns.virtual_host != "":
                                 self._hostmask = ns.virtual_host
                                 self.send(":%s!%s@%s %s %s :Your \x02vhost\x02 has been activated\r\n" %
-                                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
                         else:
                             self.send(":%s!%s@%s %s %s :Error: Invalid password\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                     else:
                         self.send(":%s!%s@%s %s %s :Error: Your nick isn't registered\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
             except:
                 self.send(":%s!%s@%s %s %s :Syntax: \x02IDENTIFY \x1Fpassword\x1F\x02\r\n" %
-                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
         elif param[1] == "GHOST":
             try:
@@ -5402,13 +5399,13 @@ def Nickserv_function(self, param, msgtype=""):
 
                             cid.send(
                                 ":%s!%s@%s %s %s :A ghost command has been used on your nickname, it may be because someone has already registered your name\r\n"
-                                % ("NickServ", "NickServ", NetworkName, replyType, cid._nickname))
+                                % ("NickServ", "NickServ", server_context.configuration.network_name, replyType, cid._nickname))
 
                             # non IRCX clients don't understand KILL
                             nonIRCXsend = ":%s!%s@%s QUIT :Killed by %s (%s)\r\n" % (
                                 cid._nickname, cid._username, cid._hostmask, "NickServ", "Ghosted nickname")
                             _send = ":%s!%s@%s KILL %s :Ghost nickname\r\n" % (
-                                "NickServ", "NickServ", NetworkName, cid._nickname)
+                                "NickServ", "NickServ", server_context.configuration.network_name, cid._nickname)
                             if cid._IRCX:
                                 cid.send(_send)
                             else:
@@ -5435,21 +5432,21 @@ def Nickserv_function(self, param, msgtype=""):
                             cid.die = True
 
                             self.send(":%s!%s@%s %s %s :The ghosted nickname has been killed\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
                         else:
                             self.send(":%s!%s@%s %s %s :Error: Your nickname is free\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                     else:
                         self.send(":%s!%s@%s %s %s :Error: Invalid password\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                 else:
                     self.send(":%s!%s@%s %s %s :Error: That nick isn't registered\r\n" %
-                              ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                              ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
             except:
                 self.send(":%s!%s@%s %s %s :Syntax: \x02GHOST \x1Fnickname\x1F \x1Fpassword\x1F\x02\r\n" %
-                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
         elif param[1] == "INFO":
             try:
@@ -5467,22 +5464,22 @@ def Nickserv_function(self, param, msgtype=""):
                         ns = server_context.nickserv_entries[nickn.lower()]
 
                     self.send(":%s!%s@%s %s %s :\x02Nickname Information\x02 for %s\r\n" %
-                              ("NickServ", "NickServ", NetworkName, replyType, self._nickname, ns._nickname))
+                              ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, ns._nickname))
                     if len(ns.grouped_nicknames) != 0:
                         self.send(":%s!%s@%s %s %s :Grouped nicknames: %s\r\n" % ("NickServ", "NickServ",
-                                                                                  NetworkName, replyType,
+                                                                                  server_context.configuration.network_name, replyType,
                                                                                   self._nickname,
                                                                                   ", ".join(ns.grouped_nicknames)))
-                    self.send(":%s!%s@%s %s %s :Registered: %s\r\n" % ("NickServ", "NickServ", NetworkName,
+                    self.send(":%s!%s@%s %s %s :Registered: %s\r\n" % ("NickServ", "NickServ", server_context.configuration.network_name,
                                                                        replyType, self._nickname,
                                                                        time.ctime(float(ns.registration_time))))
-                    if ns.show_email == "True" or self._nickname.lower() in server_context.operator_entries:
+                    if ns.show_email or self._nickname.lower() in server_context.operator_entries:
                         emailaddress = ns._email
                     else:
                         emailaddress = "hidden"
 
                     self.send(":%s!%s@%s %s %s :Email address: %s\r\n" %
-                              ("NickServ", "NickServ", NetworkName, replyType, self._nickname, emailaddress))
+                              ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, emailaddress))
                     onlineStatus = "Online but not identified (could be a clone)"
                     if nickn.lower() in server_context.nickname_to_client_mapping_entries:
                         nick_id = server_context.nickname_to_client_mapping_entries[nickn.lower()]
@@ -5493,21 +5490,21 @@ def Nickserv_function(self, param, msgtype=""):
 
                     self.send(
                         ":%s!%s@%s %s %s :User is: %s\r\n" %
-                        ("NickServ", "NickServ", NetworkName, replyType, self._nickname, onlineStatus))
+                        ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, onlineStatus))
 
                     if self._nickname.lower() in server_context.operator_entries:
                         opid = server_context.operator_entries[self._nickname.lower()]
                         if opid.operator_level > ns._level:
                             self.send(
                                 ":%s!%s@%s %s %s :Address: %s\r\n" %
-                                ("NickServ", "NickServ", NetworkName, replyType, self._nickname, ns._details))
+                                ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, ns._details))
                 else:
                     self.send(":%s!%s@%s %s %s :Error: That nick isn't registered\r\n" %
-                              ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                              ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
             except:
                 self.send(":%s!%s@%s %s %s :Syntax: \x02INFO \x1Fnickname\x1F\x02\r\n" %
-                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
         elif param[1] == "SET":
             try:
@@ -5515,13 +5512,13 @@ def Nickserv_function(self, param, msgtype=""):
                 if nickn.upper() == "HELP":
                     if self._nickname.lower() in server_context.operator_entries:
                         self.send(":%s!%s@%s %s %s :SET <nickname> \x02VHOST\x02 \x1Fmask\x1F\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
                     self.send(
                         ":%s!%s@%s %s %s :SET <nickname> \x02PASSWORD\x02 \x1Fold password\x1F \x1Fnew password\x1F\r\n" %
-                        ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                        ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                     self.send(":%s!%s@%s %s %s :SET <nickname> \x02SHOWEMAIL\x02 \x1Fon/off\x1F\r\n" %
-                              ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                              ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
                 elif nickn.lower() in server_context.nickserv_entries:
                     option = param[3].upper()
@@ -5533,13 +5530,13 @@ def Nickserv_function(self, param, msgtype=""):
                         if option == "VHOST":
                             if nid.virtual_host != "":
                                 self.send(":%s!%s@%s %s %s :Nickserv will no longer assign a vhost to %s\r\n" %
-                                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname,
+                                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname,
                                            nid._nickname))
                                 nid.virtual_host = ""
                                 WriteUsers(True, False)
                             else:
                                 self.send(":%s!%s@%s %s %s :%s does not have a \x02vhost\x02 assigned\r\n" %
-                                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname,
+                                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname,
                                            nid._nickname))
 
                             option = ""
@@ -5555,44 +5552,44 @@ def Nickserv_function(self, param, msgtype=""):
                                     nid.virtual_host = value
                                     WriteUsers(True, False)
                                     self.send(":%s!%s@%s %s %s :A \x02vhost\x02 has been assigned to %s\r\n" %
-                                              ("NickServ", "NickServ", NetworkName, replyType, self._nickname,
+                                              ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname,
                                                nid._nickname))
                                     if nickn.lower() in server_context.nickname_to_client_mapping_entries:
                                         cid = server_context.nickname_to_client_mapping_entries[nickn.lower()]
                                         if cid._MODE_register and cid != self:  # if they are registered
                                             cid.send(
                                                 ":%s!%s@%s %s %s :A \x02vhost\x02 has been assigned to your registered nickname\r\n" %
-                                                ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                                ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                                             cid._hostmask = value
                                 else:
                                     self.send(":%s!%s@%s %s %s :Error: Invalid vhost\r\n" %
-                                              ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                              ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                             else:
                                 self.send(":%s!%s@%s %s %s :Error: Access denied\r\n" %
-                                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                         else:
                             self.send(":%s!%s@%s %s %s :Error: Access denied\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
                     elif option == "SHOWEMAIL":
                         if nickn.lower() == self._nickname.lower() and "r" in self._MODE_:
                             if value == "on":
-                                nid.show_email = "True"
+                                nid.show_email = True
                                 self.send(
                                     ":%s!%s@%s %s %s :Nickserv will now display your email on information requests\r\n" %
-                                    ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                    ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                                 WriteUsers(True, False)
                             elif value == "off":
-                                nid.show_email = "False"
+                                nid.show_email = False
                                 self.send(":%s!%s@%s %s %s :Nickserv will no longer display your email\r\n" %
-                                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                                 WriteUsers(True, False)
                             else:
                                 self.send(":%s!%s@%s %s %s :SET <nickname> \x02SHOWEMAIL\x02 \x1Fon/off\x1F\r\n" %
-                                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                         else:
                             self.send(":%s!%s@%s %s %s :Error: Access denied\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
                     elif option == "PASSWORD":
                         value1 = param[5]
@@ -5606,29 +5603,29 @@ def Nickserv_function(self, param, msgtype=""):
                                 nid._password = writehash2.hexdigest()
                                 WriteUsers(True, False)
                                 self.send(":%s!%s@%s %s %s :Nickserv password has been changed successfully\r\n" %
-                                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                                 if nickn.lower() in server_context.nickname_to_client_mapping_entries:
                                     cid = server_context.nickname_to_client_mapping_entries[nickn.lower()]
                                     if cid._MODE_register:
                                         cid.send(
                                             ":%s!%s@%s %s %s :Your nickname \x02password\x02 has been changed to \x02%s\x02\r\n" %
-                                            ("NickServ", "NickServ", NetworkName, replyType, self._nickname, value1))
+                                            ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, value1))
                             else:
                                 self.send(":%s!%s@%s %s %s :Error: Invalid password\r\n" %
-                                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                         else:
                             self.send(":%s!%s@%s %s %s :Error: That nick isn't registered\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                     else:
                         self.send(":%s!%s@%s %s %s :Error: Unknown property\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                 else:
                     self.send(
                         ":%s!%s@%s %s %s :Error: That nick isn't registered or you are not using your primary nickname\r\n" %
-                        ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                        ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
             except:
                 self.send(":%s!%s@%s %s %s :Syntax Error: \x02SET \x1Fhelp\x1F\x02\r\n" %
-                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
         elif param[1] == "UNGROUP":  # NS GROUP nickname <password>
             try:
@@ -5639,24 +5636,24 @@ def Nickserv_function(self, param, msgtype=""):
                     if writehash1.hexdigest() == nid._password:
                         if self._nickname.lower() not in nid.grouped_nicknames:
                             self.send(":%s!%s@%s %s %s :Error: No such nickname grouped to %s\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname, nid._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, nid._nickname))
                         else:
                             nid.grouped_nicknames.remove(self._nickname.lower())
                             self.send(":%s!%s@%s %s %s :That nickname is now ungrouped\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                             WriteUsers(True, False)
                     else:
                         self.send(":%s!%s@%s %s %s :Error: Invalid password\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
                 else:
                     self.send(
                         ":%s!%s@%s %s %s :Error: The nickname you're trying to group with does not exist!\r\n" %
-                        ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                        ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
             except IndexError:
                 self.send(":%s!%s@%s %s %s :Syntax Error: \x02GROUP \x1Fprimary nickname\x1F \x1Fpassword\x1F\r\n" %
-                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
         elif param[1] == "GROUP":  # NS GROUP nickname <password>
             try:
@@ -5666,14 +5663,14 @@ def Nickserv_function(self, param, msgtype=""):
                     if writehash1.hexdigest() == nid._password:
                         if len(nid.grouped_nicknames) == 2:
                             self.send(":%s!%s@%s %s %s :Error: You can only \x02group\x02 two nicknames\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                         else:
                             grouped_already = False
                             for groupnicks in list(server_context.nickserv_entries.values()):
                                 if self._nickname.lower() in groupnicks.grouped_nicknames:
                                     self.send(
                                         ":%s!%s@%s %s %s :Error: This nickname is already grouped/registered\r\n" %
-                                        ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                        ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                                     grouped_already = True
                                     break
 
@@ -5681,8 +5678,8 @@ def Nickserv_function(self, param, msgtype=""):
                                 nid.grouped_nicknames.append(self._nickname.lower())
                                 self.send(
                                     ":%s!%s@%s %s %s :\x02Grouping complete\x02\r\n:%s!%s@%s %s %s :%s has been \x02grouped\x02 with the registered nickname: %s\r\n" % (
-                                        "NickServ", "NickServ", NetworkName, replyType, self._nickname, "NickServ",
-                                        "NickServ", NetworkName, replyType, self._nickname, self._nickname,
+                                        "NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, "NickServ",
+                                        "NickServ", server_context.configuration.network_name, replyType, self._nickname, self._nickname,
                                         nid._nickname))
                                 WriteUsers(True, False)
                                 self._MODE_register = True
@@ -5692,23 +5689,23 @@ def Nickserv_function(self, param, msgtype=""):
                                 if "r" not in self._MODE_:
                                     self._MODE_ += "r"
                                 self.send(":%s!%s@%s MODE %s +r\r\n" %
-                                          ("NickServ", "NickServ", NetworkName, self._nickname))
+                                          ("NickServ", "NickServ", server_context.configuration.network_name, self._nickname))
                                 sendNickservOpers(
                                     "Notice -- \x02NickServ\x02 - (%s!%s@%s) [%s] has grouped their nickname with \x02%s\x02\r\n" % (
                                         self._nickname, self._username, self._hostmask, self.details[0], nid._nickname))
 
                     else:
                         self.send(":%s!%s@%s %s %s :Error: Invalid password\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
                 else:
                     self.send(
                         ":%s!%s@%s %s %s :Error: The nickname you're trying to group with does not exist!\r\n" %
-                        ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                        ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
             except IndexError:
                 self.send(":%s!%s@%s %s %s :Syntax: \x02GROUP \x1Fprimary nickname\x1F \x1Fpassword\x1F\r\n" %
-                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
         elif param[1] == "DROP":
             try:
@@ -5724,7 +5721,7 @@ def Nickserv_function(self, param, msgtype=""):
                         grouped_nick = True
                         self.send(
                             ":%s!%s@%s %s %s :Error: You cannot \x02drop\x02 a grouped nickname, please use \x1FUNGROUP\x1F\r\n" %
-                            ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                            ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                         break
 
                 if grouped_nick == False:
@@ -5757,70 +5754,70 @@ def Nickserv_function(self, param, msgtype=""):
 
                                         cid.send(
                                             ":%s!%s@%s MODE %s -r\r\n" %
-                                            ("NickServ", "Nickserv", NetworkName, cid._nickname))
+                                            ("NickServ", "Nickserv", server_context.configuration.network_name, cid._nickname))
                                         if cid != self:
                                             cid.send(":%s!%s@%s %s %s :Your nickname has been dropped\r\n" %
-                                                     ("NickServ", "NickServ", NetworkName, replyType, cid._nickname))
+                                                     ("NickServ", "NickServ", server_context.configuration.network_name, replyType, cid._nickname))
 
                                 del server_context.nickserv_entries[nickn.lower()]
                                 WriteUsers(True, False)
                                 self.send(":%s!%s@%s %s %s :The nickname \x02%s\x02 has been dropped\r\n" %
                                           (
-                                              "NickServ", "NickServ", NetworkName, replyType, self._nickname,
+                                              "NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname,
                                               ns._nickname))
                             else:
                                 self.send(":%s!%s@%s %s %s :Error: Access denied\r\n" %
-                                          ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                          ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                         else:
                             self.send(":%s!%s@%s %s %s :Error: Access denied\r\n" %
-                                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
                     else:
                         self.send(":%s!%s@%s %s %s :Error: That nick isn't registered\r\n" %
-                                  ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                                  ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
             except:
                 self.send(
                     ":%s!%s@%s %s %s :Syntax: \x02DROP \x1Fnickname\x1F \x1F[password]\x1F\x02\r\n" %
-                    ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                    ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
         elif param[1] == "HELP":
             self.send(
                 ":%s!%s@%s %s %s :REGISTER register a nickname\r\n:%s!%s@%s %s %s :IDENTIFY identify yourself with a password\r\n:%s!%s@%s %s %s :GHOST Disconnect a user using your nickname \r\n" %
-                ("NickServ", "NickServ", NetworkName, replyType, self._nickname, "NickServ", "NickServ", NetworkName,
-                 replyType, self._nickname, "NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name,
+                 replyType, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
             self.send(
                 ":%s!%s@%s %s %s :INFO get information about a nickname\r\n:%s!%s@%s %s %s :DROP release nickname from services, this means other users can register this nick\r\n" %
-                ("NickServ", "NickServ", NetworkName, replyType, self._nickname, "NickServ", "NickServ", NetworkName,
+                ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name,
                  replyType, self._nickname))
             self.send(
                 ":%s!%s@%s %s %s :GROUP/UNGROUP groups alternative nicknames with your primary nickname\r\n:%s!%s@%s %s %s :SET help\r\n" %
-                ("NickServ", "NickServ", NetworkName, replyType, self._nickname, "NickServ", "NickServ", NetworkName,
+                ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name,
                  replyType, self._nickname))
             self.send(
                 ":%s!%s@%s %s %s :DEFCON view or modify the DEFCON settings\r\n:%s!%s@%s %s %s :IPLOCK view or modify the IP lock settings\r\n" %
-                ("NickServ", "NickServ", NetworkName, replyType, self._nickname, "NickServ", "NickServ", NetworkName,
+                ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name,
                  replyType, self._nickname))
 
         else:
             self.send(":%s!%s@%s %s %s :Error: Unknown command\r\n" %
-                      ("NickServ", "NickServ", NetworkName, replyType, self._nickname))
+                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
 
     except:
         self.send(
             ":%s!%s@%s %s %s :REGISTER register a nickname\r\n:%s!%s@%s %s %s :IDENTIFY identify yourself with a password\r\n:%s!%s@%s %s %s :GHOST Disconnect a user using your nickname \r\n" %
-            ("NickServ", "NickServ", NetworkName, replyType, self._nickname, "NickServ", "NickServ", NetworkName,
-             replyType, self._nickname, "NickServ", "NickServ", NetworkName, replyType, self._nickname))
+            ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name,
+             replyType, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname))
         self.send(
             ":%s!%s@%s %s %s :INFO get information about a nickname\r\n:%s!%s@%s %s %s :DROP release nickname from services, this means other users can register this nick\r\n" %
-            ("NickServ", "NickServ", NetworkName, replyType, self._nickname, "NickServ", "NickServ", NetworkName,
+            ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name,
              replyType, self._nickname))
         self.send(
             ":%s!%s@%s %s %s :GROUP/UNGROUP groups alternative nicknames with your primary nickname\r\n:%s!%s@%s %s %s :SET help\r\n" %
-            ("NickServ", "NickServ", NetworkName, replyType, self._nickname, "NickServ", "NickServ", NetworkName,
+            ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name,
              replyType, self._nickname))
         self.send(
             ":%s!%s@%s %s %s :DEFCON view or modify the DEFCON settings\r\n:%s!%s@%s %s %s :IPLOCK view or modify the IP lock settings\r\n" %
-            ("NickServ", "NickServ", NetworkName, replyType, self._nickname, "NickServ", "NickServ", NetworkName,
+            ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self._nickname, "NickServ", "NickServ", server_context.configuration.network_name,
              replyType, self._nickname))
 
 

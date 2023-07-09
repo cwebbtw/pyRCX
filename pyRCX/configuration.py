@@ -9,9 +9,12 @@ class Configuration:
     _DEFAULT_MAX_CHANNELS_PER_USER = 10
     _DEFAULT_MAX_CHANNELS = 100
     _DEFAULT_MODES = "ntl 75"
-    _DEFAULT_SERVER_NAME = "pyRCX"
-    _DEFAULT_PROFANITY = []
-    _DEFAULT_FLOODING_EXEMPT_COMMANDS = []
+    _DEFAULT_SERVER_NAME = "pyRCXServ01"
+    _DEFAULT_NETWORK_NAME = "pyRCXNet"
+    _DEFAULT_PROFANITY: List[str] = []
+    _DEFAULT_FLOODING_EXEMPT_COMMANDS: List[str] = []
+    _DEFAULT_SERVER_ADMIN_NAME = "pyRCX Admin"
+    _DEFAULT_SERVER_ADMIN_ORGANISATION = "pyRCX Administration Group"
 
     _DEFAULT_CHANNELS_DATABASE = "database/channels.dat"
     _DEFAULT_ACCESS_DATABASE = "database/access.dat"
@@ -31,8 +34,11 @@ class Configuration:
         self.max_channels_per_user: int = Configuration._DEFAULT_MAX_CHANNELS_PER_USER
         self.max_channels: int = Configuration._DEFAULT_MAX_CHANNELS
         self.server_name: str = Configuration._DEFAULT_SERVER_NAME
+        self.network_name: str = Configuration._DEFAULT_NETWORK_NAME
         self.profanity_entries: List[str] = Configuration._DEFAULT_PROFANITY
         self.flooding_exempt_commands: List[str] = Configuration._DEFAULT_FLOODING_EXEMPT_COMMANDS
+        self.server_admin_name: str = Configuration._DEFAULT_SERVER_ADMIN_NAME
+        self.server_admin_organisation: str = Configuration._DEFAULT_SERVER_ADMIN_ORGANISATION
 
         self.channels_database_file: str = Configuration._DEFAULT_CHANNELS_DATABASE
         self.access_database_file: str = Configuration._DEFAULT_ACCESS_DATABASE

@@ -23,7 +23,6 @@ class ServerContext:
         self.server_access_entries: List[AccessInformation] = []
         self.configuration: Configuration = Configuration()
 
-
     def add_channel(self, channel_name, channel):
         self.channel_entries[channel_name.lower()] = channel
 
@@ -33,7 +32,10 @@ class ServerContext:
     def get_channel(self, channel: str):
         return self.channel_entries.get(channel.lower(), None)
 
-    def get_user(self, nickname: str) -> 'User':
+    def add_user(self, nickname: str, user: User):
+        self.nickname_to_client_mapping_entries[nickname.lower()] = user
+
+    def get_user(self, nickname: str) -> User:
         return self.nickname_to_client_mapping_entries.get(nickname.lower(), None)
 
     def get_operator(self, nickname: str) -> OperatorEntry:

@@ -1,6 +1,7 @@
 import logging
 import unittest
 import sys
+from unittest import TestCase
 from unittest.mock import MagicMock
 
 from pyRCX import server
@@ -50,3 +51,7 @@ class ChannelTest(unittest.TestCase):
         self.assertTrue(expected_channel.MODE_private)
         self.assertEqual(expected_channel.channelname, "#somewhere")
         self.assertEqual(expected_channel._prop.onjoin, "welcome")
+
+
+class TestPartCommand(TestCase):
+    pass

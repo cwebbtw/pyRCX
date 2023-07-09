@@ -1,3 +1,6 @@
+from typing import List
+
+
 class NickServEntry:
     """
     Represents an entry in the NickServ database
@@ -11,8 +14,8 @@ class NickServEntry:
                  ip: str,
                  virtual_host: str,
                  level: int,
-                 show_email: str = False):
-        self.grouped_nicknames = []
+                 show_email: bool = False):
+        self.grouped_nicknames: List[str] = []
         self.registration_time = registration_time
         self.show_email = show_email
         self.virtual_host = virtual_host

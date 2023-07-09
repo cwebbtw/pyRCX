@@ -12,9 +12,9 @@ class Raw:
                  disabled_functionality: Dict[str, int]):
         self.logger = logging.getLogger('RAW')
 
-        self.configuration = configuration
-        self.statistics = statistics
-        self.disabled_functionality = disabled_functionality
+        self.configuration: Configuration = configuration
+        self.statistics: Statistics = statistics
+        self.disabled_functionality: Dict[str, int] = disabled_functionality
 
     def raw(self, param1: User, param2="", param3="", param4="", param5="", param6="", param7=""):
         if param3 == "":
@@ -22,28 +22,28 @@ class Raw:
 
         if param2 == "001":
             param1.send(
-                ":" + self.configuration.server_name + " 001 " + param3 + " :Welcome to the " + param4 + " chat service " + param3 + "\r\n")
+                ":" + self.configuration.server_name + " 001 " + param3 + " :Welcome to the " + self.configuration.network_name + " chat service " + param3 + "\r\n")
 
         if param2 == "002":
             param1.send(
-                ":" + self.configuration.server_name + " 002 " + param3 + " :Your host is " + param4 + ", running version " + self.configuration.VERSION + "\r\n")
+                ":" + self.configuration.server_name + " 002 " + param3 + " :Your host is " + self.configuration.server_name + ", running version " + self.configuration.VERSION + "\r\n")
 
         if param2 == "003":
             param1.send(":" + self.configuration.server_name + " 003 " + param3 + " :This server was created on %s\r\n" %
                         (time.strftime("%A %B %d %H:%M:%S %Y GMT", time.localtime())))
 
         if param2 == "004":
-            param1.send(":" + self.configuration.server_name + " 004 " + param3 + " " + param4 +
+            param1.send(":" + self.configuration.server_name + " 004 " + param3 + " " + self.configuration.network_name +
                         " pyRCX " + self.configuration.VERSION + " abAfghiInoOpPrwzX aAbcCdefGhikKlmMnNopPqQrRsStTuvwxXZ\r\n")
 
         if param2 == "005":
             if "IRCX" in self.disabled_functionality:
                 param1.send(
-                    ":" + self.configuration.server_name + " 005 " + param3 + " IRC PREFIX=(ov)@+ NETWORK=" + param4 +
+                    ":" + self.configuration.server_name + " 005 " + param3 + " IRC PREFIX=(ov)@+ NETWORK=" + self.configuration.network_name +
                     " are supported by this server\r\n")
             else:
                 param1.send(
-                    ":" + self.configuration.server_name + " 005 " + param3 + " IRCX PREFIX=(qov).@+ NETWORK=" + param4 +
+                    ":" + self.configuration.server_name + " 005 " + param3 + " IRCX PREFIX=(qov).@+ NETWORK=" + self.configuration.network_name +
                     " are supported by this server\r\n")
 
         if param2 == "221":
@@ -82,17 +82,17 @@ class Raw:
         if param2 == "256":
             # display if operators available
             param1.send(
-                ":" + self.configuration.server_name + " 256 " + param3 + " :" + param4 + " communications service\r\n")
+                ":" + self.configuration.server_name + " 256 " + param3 + " :" + self.configuration.network_name + " communications service\r\n")
 
         if param2 == "257":
             # display if operators available
             param1.send(":" + self.configuration.server_name + " 257 " + param3 + " :pyRCX version " + self.configuration.VERSION + ", see /CREDITS\r\n")
 
         if param2 == "258":
-            param1.send(":" + self.configuration.server_name + " 258 " + param3 + " :" + param4 + "\r\n")
+            param1.send(":" + self.configuration.server_name + " 258 " + param3 + " :" + self.configuration.server_admin_name + "\r\n")
 
         if param2 == "259":
-            param1.send(":" + self.configuration.server_name + " 259 " + param3 + " :" + param4 + "\r\n")
+            param1.send(":" + self.configuration.server_name + " 259 " + param3 + " :" + self.configuration.server_admin_organisation + "\r\n")
 
         if param2 == "263":
             param1.send(":" + self.configuration.server_name + " 263 " + param3 + " :Message too long, restrict your output\r\n")
@@ -136,7 +136,7 @@ class Raw:
 
         if param2 == "312":
             param1.send(
-                ":" + self.configuration.server_name + " 312 " + param3 + " " + param4._nickname + " " + param4._server + " :" + param5 + "\r\n")
+                ":" + self.configuration.server_name + " 312 " + param3 + " " + param4._nickname + " " + param4._server + " :" + self.configuration.network_name + "\r\n")
 
         if param2 == "313":
             if "A" in param5:
@@ -220,7 +220,7 @@ class Raw:
 
         if param2 == "364":
             param1.send(
-                ":" + self.configuration.server_name + " 364 " + param3 + " " + param4 + " " + self.network_name + " :0 " + param5 + "\r\n")
+                ":" + self.configuration.server_name + " 364 " + param3 + " " + param4 + " " + self.configuration.network_name + " :0 " + param5 + "\r\n")
 
         if param2 == "365":
             param1.send(":" + self.configuration.server_name + " 365 " + param3 + " * :End of /LINKS list.\r\n")
@@ -237,7 +237,7 @@ class Raw:
 
         if param2 == "371":
             param1.send(
-                ":" + self.configuration.server_name + " 371 " + param3 + " :" + param4 + "communication service "
+                ":" + self.configuration.server_name + " 371 " + param3 + " :" + self.configuration.network_name + "communication service "
                                                                             + self.configuration.VERSION + "\r\n:" +
                 self.configuration.server_name + " 371 " + param3 + self.statistics.server_launch + "\r\n")
 
