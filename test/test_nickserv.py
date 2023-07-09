@@ -5,6 +5,7 @@ import sys
 from unittest.mock import MagicMock
 
 from pyRCX import server
+from pyRCX.server_context import ServerContext
 
 
 class NickServTest(unittest.TestCase):
@@ -17,6 +18,9 @@ class NickServTest(unittest.TestCase):
     def setUp(self):
         logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
         server.WriteUsers = MagicMock()
+
+        server_context: ServerContext = ServerContext()
+        server.server_context = server_context
 
     def test_register_creates_registered_nickname(self):
         # Given
@@ -32,7 +36,7 @@ class NickServTest(unittest.TestCase):
         # When
         server.Nickserv_function(client, parameters, message_type)
 
-        nickserv_entry = server.nickserv_entries[client._nickname]
+        nickserv_entry = server.server_context.nickserv_entries[client._nickname]
 
         # Then
         self.assertEqual(nickserv_entry._email, email)
@@ -57,7 +61,7 @@ class NickServTest(unittest.TestCase):
         # When
         server.Nickserv_function(client, parameters, message_type)
 
-        nickserv_entry = server.nickserv_entries[group_owner_nickname]
+        nickserv_entry = server.server_context.nickserv_entries[group_owner_nickname]
 
         # Then
         self.assertEqual(nickserv_entry.grouped_nicknames, [client._nickname])

@@ -21,8 +21,8 @@ class Filtering:
     as not all callers use the filter method but instead access the underlying list
     """
 
-    def __init__(self, initial_filters: List[FilterEntry] = []):
-        self._filters = initial_filters
+    def __init__(self):
+        self._filters = []
 
     def add_filter(self, filter_entry: FilterEntry):
         self._filters.append(filter_entry)
