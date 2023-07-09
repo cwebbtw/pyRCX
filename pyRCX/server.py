@@ -66,10 +66,6 @@ MaxUsersPerConnection = 3
 NickservParam = ""
 defconMode = 1
 
-NTPtime = 0
-timeDifference = 0
-NTPServer = ""
-
 Ports = []
 temp_noopers = []
 operlines = []
@@ -90,19 +86,19 @@ def stripx01(badstring):
     return badstring.replace("\x01", "")
 
 
-def GetUsers():
-    logger = logging.getLogger('USERS')
+def load_nickserv_database():
+    logger = logging.getLogger('NICKSERV')
 
-    myfile = open("database/Nickserv.dat", "rb")
-    rdata = myfile.read()
     try:
-        if rdata != "":
-            server_context.nickserv_entries = loads(decompress(rdata))
-    except:
-        logger.warning("Could not load Nickserv database, creating an empty database.\r\n")
-        server_context.nickserv_entries = {}
+        with open(server_context.configuration.nickserv_database_file, "rb") as file:
+            rdata = file.read()
 
-    myfile.close()
+            if rdata != "":
+                server_context.nickserv_entries = loads(decompress(rdata))
+    except Exception as e:
+        logger.info("Could not load NickServ database, an empty in-memory database will be used")
+        logger.debug(e)
+        server_context.nickserv_entries = {}
 
 
 def WriteUsers(nicksv=True, chans=True, access=False):
@@ -115,30 +111,27 @@ def WriteUsers(nicksv=True, chans=True, access=False):
             statistics.save()
 
             if nicksv:
-                myfile = open("database/Nickserv.dat", "wb")
-                myfile.write(compress(dumps(server_context.nickserv_entries)))
-                myfile.close()
+                with open(server_context.configuration.nickserv_database_file, "wb") as file:
+                    file.write(compress(dumps(server_context.nickserv_entries)))
 
             if chans:
-                myfile = open("database/channels.dat", "wb")
-                schan = copy(server_context.channel_entries)
-                for each in schan:
-                    chanid = server_context.channel_entries[each.lower()]
-                    if chanid.MODE_registered:
-                        myfile.write(
-                            ("C=%s\x01=%s\x01=%s\x01=%s\x01=%s\x01=%s\r\n" %
-                             (stripx01(chanid.channelname),
-                              stripx01(chanid.GetChannelModes(0, True)),
-                              stripx01(chanid._topic),
-                              chanid._founder, compress(dumps(chanid._prop)).hex(),
-                              compress(dumps(chanid.ChannelAccess)).hex())).encode(character_encoding))
-
-                myfile.close()
+                with open(server_context.configuration.channels_database_file, "wb") as file:
+                    schan = copy(server_context.channel_entries)
+                    for each in schan:
+                        chanid = server_context.channel_entries[each.lower()]
+                        if chanid.MODE_registered:
+                            file.write(
+                                ("C=%s\x01=%s\x01=%s\x01=%s\x01=%s\x01=%s\r\n" %
+                                 (stripx01(chanid.channelname),
+                                  stripx01(chanid.GetChannelModes(0, True)),
+                                  stripx01(chanid._topic),
+                                  chanid._founder, compress(dumps(chanid._prop)).hex(),
+                                  compress(dumps(chanid.ChannelAccess)).hex())).encode(character_encoding))
 
             if access:
-                myfile = open("database/access.dat", "wb")
-                myfile.write(dumps(server_context.server_access_entries))
-                myfile.close()
+                with open(server_context.configuration.access_database_file, "wb") as file:
+                    file.write(dumps(server_context.server_access_entries))
+
         except Exception as exception:
             logger.error(exception)
 
@@ -146,11 +139,11 @@ def WriteUsers(nicksv=True, chans=True, access=False):
 
 
 def rehash(par=1):  # this information will be rehashed by any operator with level 4 privlidges (Administrator)
-    myfile = open("conf/pyRCX.conf", "r")
+    myfile = open(server_context.configuration.server_config_file, "r")
     try:
         global ServerAddress, server_name, NetworkName, connectionsExempt, operlines, Ports
         global MaxUsers, MaxUsersPerConnection, NickfloodAmount, NickfloodWait
-        global NickservParam, NTPServer, ipaddress, ServerAdmin1, ServerAdmin2, AdminPassword, ServerPassword
+        global NickservParam, ipaddress, ServerAdmin1, ServerAdmin2, AdminPassword, ServerPassword
         global passmsg, HostMaskingParam, HostMasking, PrefixChar, MaxServerEntries, MaxChannelEntries, MaxUserEntries
         global defconMode, UserDefaultModes
 
@@ -197,8 +190,8 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
                     defconMode = 1
 
             if lineStr[0] == "T":
-                s_line = lineStr.split(":")
-                NTPServer = s_line[1].split(";")[0]
+                # Currently unused until linking
+                pass
 
             if lineStr[0] == "I":
                 s_line = lineStr.split(":")
@@ -405,7 +398,8 @@ def Whouser(_whouser, chan, selfn):
             return ""
 
     whostring = "%s %s %s %s %s %s%s%s :0 %s" % (
-        _whochan, _whouser._username, _whouser._hostmask, server_context.configuration.server_name, _whouser._nickname, _whoaway,
+        _whochan, _whouser._username, _whouser._hostmask, server_context.configuration.server_name, _whouser._nickname,
+        _whoaway,
         _isoper, _whomode,
         _whouser._fullname)
 
@@ -478,6 +472,7 @@ def CheckServerAccess(nickid=False):
                 server_context.server_access_entries.remove(each)
                 WriteUsers(False, False, True)
 
+
 Noop = False
 
 _lastError = []
@@ -486,6 +481,7 @@ _lastError = []
 def getGlobalChannels():
     for each in server_context.channel_entries:
         yield server_context.channel_entries[each]
+
 
 def getUserOBJ(nick):
     if nick.lower() in server_context.nickname_to_client_mapping_entries:
@@ -588,7 +584,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
              extract_tb(tuError[2])])
         self.send(
             ":%s NOTICE LINK :*** Bug found, please report the following:\r\n:%s NOTICE LINK :*** %s\r\n:%s NOTICE LINK :*** %s\r\n:%s NOTICE LINK *** End of bug report\r\n" %
-            (server_context.configuration.server_name, server_context.configuration.server_name, str(tuError[0]), server_context.configuration.server_name,
+            (server_context.configuration.server_name, server_context.configuration.server_name, str(tuError[0]),
+             server_context.configuration.server_name,
              str(tuError[1]), server_context.configuration.server_name))
 
     def selfaccess(self, cclientid):
@@ -685,7 +682,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
         raw_messages.raw(self, "004", self._nickname, NetworkName)
         raw_messages.raw(self, "005", self._nickname, NetworkName)
         self._sendlusers()
-        self._sendmotd("./conf/motd.conf")
+        self._sendmotd(f"./{server_context.configuration.motd_config_file}")
 
         if self._MODE_register:
             self._MODE_register = False
@@ -836,12 +833,14 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                 self.quittype = 10
             else:
                 if str(HostMasking) == "2":
-                    self.send(":" + server_context.configuration.server_name + " NOTICE AUTH :*** Looking up your hostname...\r\n")
+                    self.send(
+                        ":" + server_context.configuration.server_name + " NOTICE AUTH :*** Looking up your hostname...\r\n")
 
                     try:
                         self._hostname = socket.gethostbyaddr(self.details[0])[0]
                         if socket.gethostbyname(self._hostname) == self.details[0]:
-                            self.send(":" + server_context.configuration.server_name + " NOTICE AUTH :*** Found your hostname\r\n")
+                            self.send(
+                                ":" + server_context.configuration.server_name + " NOTICE AUTH :*** Found your hostname\r\n")
                         else:
                             someerror
                     except:
@@ -1039,8 +1038,9 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                         self._ptries += 1
                                         if self._ptries == 3:
                                             if self._nickname != "":
-                                                self.send(":" + server_context.configuration.server_name + " KILL " + self._nickname +
-                                                          " :Too many invalid passwords\r\n")
+                                                self.send(
+                                                    ":" + server_context.configuration.server_name + " KILL " + self._nickname +
+                                                    " :Too many invalid passwords\r\n")
                                             else:
                                                 self.send(":" + server_context.configuration.server_name +
                                                           " NOTICE AUTH :*** Too many invalid passwords\r\n")
@@ -1112,7 +1112,9 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                 if ret[0] == ":":
                                     ret = strdata.split(" ", 1)[1][1:]
                                 self.send(
-                                    ":%s PONG %s :%s\r\n" % (server_context.configuration.server_name, server_context.configuration.server_name, ret))
+                                    ":%s PONG %s :%s\r\n" % (
+                                    server_context.configuration.server_name, server_context.configuration.server_name,
+                                    ret))
                             except:
                                 raw_messages.raw(self, "409", self._nickname)
 
@@ -1162,7 +1164,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                 temp_noopers.append(cid)
                                                                 cid.send(
                                                                     ":%s MODE %s -%s\r\n" %
-                                                                    (server_context.configuration.server_name, cid._nickname,
+                                                                    (server_context.configuration.server_name,
+                                                                     cid._nickname,
                                                                      opid2.flags))
                                                                 cid.send(
                                                                     ":" + server_context.configuration.server_name +
@@ -1413,13 +1416,15 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                 self.send(":" + server_context.configuration.server_name +
                                                           " NOTICE STATS :*** Viewing Channel statistics '" +
                                                           param[1][0] + "' \r\n")
-                                                self.send(":" + server_context.configuration.server_name + " 212 " + self._nickname +
-                                                          " :Creation Modes: " + DefaultModes + "\r\n")
+                                                self.send(
+                                                    ":" + server_context.configuration.server_name + " 212 " + self._nickname +
+                                                    " :Creation Modes: " + DefaultModes + "\r\n")
                                                 self.send(
                                                     ":" + server_context.configuration.server_name + " 212 " + self._nickname + " :Max Channels: " +
                                                     server_context.configuration.max_channels + "\r\n")
-                                                self.send(":" + server_context.configuration.server_name + " 212 " + self._nickname +
-                                                          " :Max Channels per User: " + server_context.configuration.max_channels_per_user + "\r\n")
+                                                self.send(
+                                                    ":" + server_context.configuration.server_name + " 212 " + self._nickname +
+                                                    " :Max Channels per User: " + server_context.configuration.max_channels_per_user + "\r\n")
 
                                             else:
                                                 self.send(":" + server_context.configuration.server_name +
@@ -1455,7 +1460,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                  "Permission Denied - Can't /GAG another Operator")
                                             else:
                                                 cid.send(
-                                                    ":%s MODE %s +z\r\n" % (server_context.configuration.server_name, cid._nickname))
+                                                    ":%s MODE %s +z\r\n" % (
+                                                    server_context.configuration.server_name, cid._nickname))
                                                 self.send(
                                                     ":" + server_context.configuration.server_name + " NOTICE GAG :*** " + self._nickname +
                                                     " Added " + cid._nickname + " to the GAG list\r\n")
@@ -1476,7 +1482,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                  "Permission Denied - Can't use /UNGAG with another Operator")
                                             else:
                                                 cid.send(
-                                                    ":%s MODE %s -z\r\n" % (server_context.configuration.server_name, cid._nickname))
+                                                    ":%s MODE %s -z\r\n" % (
+                                                    server_context.configuration.server_name, cid._nickname))
                                                 self.send(
                                                     ":" + server_context.configuration.server_name + " NOTICE GAG :*** " + self._nickname +
                                                     " Removed " + cid._nickname + " from the GAG list\r\n")
@@ -1707,7 +1714,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                         for each in chanid._users:
                                                             clientid = \
-                                                            server_context.nickname_to_client_mapping_entries[each]
+                                                                server_context.nickname_to_client_mapping_entries[each]
                                                             clientid.send(
                                                                 ":%s!%s@%s TOPIC %s :%s\r\n" % (
                                                                     self._nickname, self._username, self._hostmask,
@@ -1864,8 +1871,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                 if recipient[0] == "$":
                                                                     for n in server_context.nickname_to_client_mapping_entries:
                                                                         cclientid = \
-                                                                        server_context.nickname_to_client_mapping_entries[
-                                                                            n.lower()]
+                                                                            server_context.nickname_to_client_mapping_entries[
+                                                                                n.lower()]
                                                                         cclientid.send(":%s!%s@%s %s %s :%s\r\n" %
                                                                                        (self._nickname, self._username,
                                                                                         self._hostmask,
@@ -2329,10 +2336,12 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                             for each in chanid._users:
                                                                 cclientid = \
-                                                                server_context.nickname_to_client_mapping_entries[each]
+                                                                    server_context.nickname_to_client_mapping_entries[
+                                                                        each]
                                                                 cclientid.send(
                                                                     ":%s MODE %s +r\r\n" %
-                                                                    (server_context.configuration.server_name, chanid.channelname))
+                                                                    (server_context.configuration.server_name,
+                                                                     chanid.channelname))
 
                                                             sendWatchOpers(
                                                                 "Notice -- The channel, '%s' has been registered (%s!%s@%s) [%s] \r\n" % (
@@ -2343,7 +2352,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                         else:
                                                             self.send(
                                                                 ":%s NOTICE %s :*** Notice -- Channel is already registered\r\n" % (
-                                                                    server_context.configuration.server_name, self._nickname))
+                                                                    server_context.configuration.server_name,
+                                                                    self._nickname))
                                                     else:
                                                         raw_messages.raw(self, "908", self._nickname)
 
@@ -2355,14 +2365,17 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                             chanid._prop.registered = ""
                                                             chanid._founder = ""
 
-                                                            access_helper.ClearRecords(chanid.channelname, self, "OWNER")
+                                                            access_helper.ClearRecords(chanid.channelname, self,
+                                                                                       "OWNER")
 
                                                             for each in chanid._users:
                                                                 cclientid = \
-                                                                server_context.nickname_to_client_mapping_entries[each]
+                                                                    server_context.nickname_to_client_mapping_entries[
+                                                                        each]
                                                                 cclientid.send(
                                                                     ":%s MODE %s -r\r\n" %
-                                                                    (server_context.configuration.server_name, chanid.channelname))
+                                                                    (server_context.configuration.server_name,
+                                                                     chanid.channelname))
 
                                                             sendWatchOpers(
                                                                 "Notice -- The channel, '%s' has been unregistered (%s!%s@%s) [%s] \r\n" % (
@@ -2376,7 +2389,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                         else:
                                                             self.send(
                                                                 ":%s NOTICE %s :*** Notice -- Channel is not registered\r\n" % (
-                                                                    server_context.configuration.server_name, self._nickname))
+                                                                    server_context.configuration.server_name,
+                                                                    self._nickname))
 
                                                     else:
                                                         raw_messages.raw(self, "908", self._nickname)
@@ -2536,7 +2550,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                     raw_messages.raw(self, "900", self._nickname,
                                                                                      param[3])
                                                                 else:
-                                                                    access_helper.ClearRecords(ret, self, param[3].upper())
+                                                                    access_helper.ClearRecords(ret, self,
+                                                                                               param[3].upper())
                                                                     if ret == "*":
                                                                         sendWatchOpers(
                                                                             "Notice -- Server access clear, '%s' has been cleared by (%s!%s@%s) [%s] \r\n" % (
@@ -3312,7 +3327,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                         self.send(
                                                             ":" + server_context.configuration.server_name + " 319 " + self._nickname + " " + _whoisuser._nickname + " :" + w_channels[
-                                                                                                                                                             1:] + "\r\n")
+                                                                                                                                                                            1:] + "\r\n")
                                                         w_channels = ""
 
                                                     chanid = getChannelOBJ(c.lower())
@@ -3369,7 +3384,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                             self.send(
                                                 ":%s!%s@%s %s %s :\x02pyRCX nickname services\x02 (currently %d registered users)\r\n:%s!%s@%s %s %s :Type \x1F/nickserv HELP\x1F for more information\r\n" % (
                                                     "NickServ", "NickServ", NetworkName, "NOTICE", self._nickname,
-                                                    len(server_context.nickserv_entries), "NickServ", "NickServ", NetworkName,
+                                                    len(server_context.nickserv_entries), "NickServ", "NickServ",
+                                                    NetworkName,
                                                     "NOTICE", self._nickname))
 
                                         else:
@@ -3392,7 +3408,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                 elif param[0] == "MOTD":
                                     try:
-                                        self._sendmotd("./conf/motd.conf")
+                                        self._sendmotd(f"./{server_context.configuration.motd_config_file}")
                                     except:
                                         pass
 
@@ -3435,8 +3451,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                         chan.channelname.lower()) or self._nickname.lower() in chan._voice:
                                                                     for each in chan._users:
                                                                         cid = \
-                                                                        server_context.nickname_to_client_mapping_entries[
-                                                                            each.lower()]
+                                                                            server_context.nickname_to_client_mapping_entries[
+                                                                                each.lower()]
                                                                         if cid != self:  # x  ! x  @ x DATA target
                                                                             cid.send(":%s!%s@%s %s %s %s :%s\r\n" %
                                                                                      (self._nickname, self._username,
@@ -3556,13 +3572,15 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                             if opid.watchbans:
                                 cid.send(
                                     ":%s NOTICE %s :*** Notice -- User tried connecting but is banned (%s!%s@%s) [%s] \r\n" % (
-                                        server_context.configuration.server_name, cid._nickname, self._nickname, self._username,
+                                        server_context.configuration.server_name, cid._nickname, self._nickname,
+                                        self._username,
                                         self._hostmask,
                                         self.details[0]))
                         else:
                             if self._nickname != "" and opid.watchserver and quit != "":
                                 cid.send(":%s NOTICE %s :*** Notice -- User Disconnected (%s!%s@%s) [%s] (%s)\r\n" % (
-                                    server_context.configuration.server_name, cid._nickname, self._nickname, self._username,
+                                    server_context.configuration.server_name, cid._nickname, self._nickname,
+                                    self._username,
                                     self._hostmask,
                                     self.details[0], quit))
                     except:
@@ -3620,7 +3638,8 @@ def Oper_function(self, param):
             raw_messages.raw(self, "461", self._nickname, param[0])
         else:
             if globals()["Noop"]:
-                self.send(":" + server_context.configuration.server_name + " NOTICE SERVER :*** OPER has been disabled\r\n")
+                self.send(
+                    ":" + server_context.configuration.server_name + " NOTICE SERVER :*** OPER has been disabled\r\n")
             else:
                 _login = False
                 for k in operlines:
@@ -3991,8 +4010,8 @@ def Mode_function(self, param, strdata=""):
                                                                         pass
                                                                     else:
                                                                         nickid = \
-                                                                        server_context.nickname_to_client_mapping_entries[
-                                                                            x]
+                                                                            server_context.nickname_to_client_mapping_entries[
+                                                                                x]
                                                                         if cid != nickid:
                                                                             if isOp(cid._nickname,
                                                                                     chan.channelname) == False and SetMode:
@@ -4039,8 +4058,8 @@ def Mode_function(self, param, strdata=""):
 
                                                             for each in chan._users:
                                                                 cclientid = \
-                                                                server_context.nickname_to_client_mapping_entries[
-                                                                    each.lower()]
+                                                                    server_context.nickname_to_client_mapping_entries[
+                                                                        each.lower()]
                                                                 # if chan.MODE_auditorium == False or isOp(cclientid._nickname,chan.channelname) or cid == cclientid:
                                                                 if chan.MODE_auditorium and SetMode == False and isOp(
                                                                         cclientid._nickname, chan.channelname) == False:
@@ -4151,8 +4170,8 @@ def Mode_function(self, param, strdata=""):
                                                                             pass
                                                                         else:
                                                                             nickid = \
-                                                                            server_context.nickname_to_client_mapping_entries[
-                                                                                x]
+                                                                                server_context.nickname_to_client_mapping_entries[
+                                                                                    x]
                                                                             if cid != nickid:
                                                                                 if isOp(cid._nickname,
                                                                                         chan.channelname) == False and SetMode:
@@ -4200,8 +4219,8 @@ def Mode_function(self, param, strdata=""):
 
                                                                 for each in chan._users:
                                                                     cclientid = \
-                                                                    server_context.nickname_to_client_mapping_entries[
-                                                                        each]
+                                                                        server_context.nickname_to_client_mapping_entries[
+                                                                            each]
                                                                     if chan.MODE_auditorium and SetMode == False and isOp(
                                                                             cclientid._nickname,
                                                                             chan.channelname) == False:
@@ -4259,7 +4278,7 @@ def Mode_function(self, param, strdata=""):
                                             else:
                                                 tag, exp = "", 0
                                                 _rec = access_helper.AddRecord(self, chan.channelname,
-                                                                         "DENY", _mask, exp, tag)
+                                                                               "DENY", _mask, exp, tag)
                                                 if _rec == 1:
                                                     stringinf = "%s %s %s %d %s %s" % (
                                                         chan.channelname, "DENY", _mask, exp, self._hostmask, tag)
@@ -5213,8 +5232,13 @@ def Nickserv_function(self, param, msgtype=""):
 
                         writehash = sha256((passw + NickservParam).encode('utf-8'))
 
-                        server_context.nickserv_entries[self._nickname.lower()] = NickServEntry(self._nickname, writehash.hexdigest(
-                        ), emaila, GetEpochTime(), self.details[0], "", olevel, False)  # add to the nickname database
+                        server_context.nickserv_entries[self._nickname.lower()] = NickServEntry(self._nickname,
+                                                                                                writehash.hexdigest(
+                                                                                                ), emaila,
+                                                                                                GetEpochTime(),
+                                                                                                self.details[0], "",
+                                                                                                olevel,
+                                                                                                False)  # add to the nickname database
 
                         self.send(
                             ":%s!%s@%s %s %s :\x02Registration complete\x02\r\n:%s!%s@%s %s %s :Your nickname has been registered with the address *@%s\r\n" % (
@@ -5813,46 +5837,50 @@ def Nickserv_function(self, param, msgtype=""):
              replyType, self._nickname))
 
 
-def settings():  # this is information such as channels, max users etc
-    with open('database/channels.dat', 'rb') as channels_file:
-        for bytes_line in channels_file.readlines():
-            s_line = bytes_line.strip().split(b'\x01')
-            if s_line[0].split(b'=')[0].upper() == b'C':
-                s_chan = s_line[0].split(b'=')[1].decode(character_encoding)
-                s_modes = s_line[1].split(b'=')[1].decode(character_encoding)
-                s_topic = s_line[2].split(b'=', 1, )[1].decode(character_encoding)
-                s_founder = s_line[3].split(b'=', 1, )[1].decode(character_encoding)
-                s_prop = bytes.fromhex(s_line[4].split(b'=', 1, )[1].decode(character_encoding))
-                s_ax = bytes.fromhex(s_line[5].split(b'=', 1, )[1].decode(character_encoding))
+def load_channel_history():  # this is information such as channels, max users etc
+    logger = logging.getLogger('HISTORY')
 
-                chanclass = Channel(server_context, raw_messages, s_chan, "", s_modes)  # create
-
-                if chanclass.channelname != "":
-                    _founder = ""
-                    server_context.channel_entries[s_chan.lower()] = chanclass
-                    if "r" in s_modes:
-                        chanclass._prop.registered = server_context.configuration.server_name
-                    if s_founder != "":
-                        _founder = access_helper.CreateMaskString(s_founder, True)
-
-                    chanclass._founder = _founder
-                    chanclass._topic = s_topic
-
-                    chanclass._topic_nick = server_context.configuration.server_name
-                    chanclass._topic_time = GetEpochTime()
-
-                    chanclass.ChannelAccess = loads(decompress(s_ax.strip()))
-                    chanclass._prop = loads(decompress(s_prop))
-                    if s_founder != "":
-                        _addrec = access_helper.AddRecord("", chanclass.channelname.lower(), "OWNER", _founder, 0, "")
-
-    myfile = open('database/access.dat', 'rb')
     try:
-        server_context.server_access_entries = loads(myfile.read())
-    except EOFError:
-        server_context.server_access_entries = []
+        with open(server_context.configuration.channels_database_file, 'rb') as channels_file:
+            for bytes_line in channels_file.readlines():
+                s_line = bytes_line.strip().split(b'\x01')
+                if s_line[0].split(b'=')[0].upper() == b'C':
+                    s_chan = s_line[0].split(b'=')[1].decode(character_encoding)
+                    s_modes = s_line[1].split(b'=')[1].decode(character_encoding)
+                    s_topic = s_line[2].split(b'=', 1, )[1].decode(character_encoding)
+                    s_founder = s_line[3].split(b'=', 1, )[1].decode(character_encoding)
+                    s_prop = bytes.fromhex(s_line[4].split(b'=', 1, )[1].decode(character_encoding))
+                    s_ax = bytes.fromhex(s_line[5].split(b'=', 1, )[1].decode(character_encoding))
 
-    myfile.close()
+                    chanclass = Channel(server_context, raw_messages, s_chan, "", s_modes)  # create
+
+                    if chanclass.channelname != "":
+                        _founder = ""
+                        server_context.channel_entries[s_chan.lower()] = chanclass
+                        if "r" in s_modes:
+                            chanclass._prop.registered = server_context.configuration.server_name
+                        if s_founder != "":
+                            _founder = access_helper.CreateMaskString(s_founder, True)
+
+                        chanclass._founder = _founder
+                        chanclass._topic = s_topic
+
+                        chanclass._topic_nick = server_context.configuration.server_name
+                        chanclass._topic_time = int(time.time())
+
+                        chanclass.ChannelAccess = loads(decompress(s_ax.strip()))
+                        chanclass._prop = loads(decompress(s_prop))
+                        if s_founder != "":
+                            _addrec = access_helper.AddRecord("", chanclass.channelname.lower(), "OWNER", _founder, 0, "")
+    except Exception as e:
+        logger.debug(e)
+
+    try:
+        with open(server_context.configuration.access_database_file, 'rb') as file:
+             server_context.server_access_entries = loads(file.read())
+    except Exception as e:
+        logger.debug(e)
+        server_context.server_access_entries = []
 
 
 class ServerListen(threading.Thread):
@@ -5860,6 +5888,7 @@ class ServerListen(threading.Thread):
     def __init__(self, port):
         self.port = port
         threading.Thread.__init__(self)
+        self.logger = logging.getLogger('SERVER')
 
     def run(self):
 
@@ -5870,7 +5899,7 @@ class ServerListen(threading.Thread):
             smain.settimeout(5.0)
             smain.listen(100)
 
-            print("* Listening on port " + str(self.port) + " on '" + ipaddress + "'")
+            self.logger.info("Listening on port " + str(self.port) + " at '" + (ipaddress.strip() or "localhost") + "'")
 
             while True:
                 time.sleep(0.1)
@@ -5898,23 +5927,6 @@ def GetEpochTime():
     # + timeDifference
 
 
-def pyRCXsetup():
-    if os.path.isfile("database/channels.dat") == False:
-        print("*** Could not find channels file, creating new channel file")
-        createfile = open("../database/channels.dat", "w")
-        createfile.close()
-
-    if os.path.isfile("database/access.dat") == False:
-        print("*** Could not find access file, setting up access file")
-        createfile = open("database/access.dat", "w")
-        createfile.close()
-
-    if os.path.isfile("database/Nickserv.dat") == False:
-        print("*** Could not find Nickserv database, installing Nickserv")
-        createfile = open("database/Nickserv.dat", "w")
-        createfile.close()
-
-
 def SetupListeningSockets():
     global currentports
 
@@ -5923,38 +5935,36 @@ def SetupListeningSockets():
             currentports[p] = ServerListen(p).start()
 
 
+
+import logging
+
 def start():
-    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
-    print(" _____  __    __  _____    _____  __    __ ")
-    print("|  _  \ \ \  / / |  _  \  /  ___| \ \  / / ")
-    print("| |_| |  \ \/ /  | |_| |  | |      \ \/ /  ")
-    print("|  ___/   \  /   |  _  /  | |       }  {   ")
-    print("| |       / /    | | \ \  | |___   / /\ \  ")
-    print("|_|      /_/     |_|  \_\ \_____| /_/  \_\ v3.0.0")
-    print("__________________________________________")
-    print("")
-    print("* GitHub: https://github.com/cwebbtw/pyRCX")
-    print("__________________________________________")
-    print("")
+    logger = logging.getLogger('START')
 
-    # TODO fix use of global
-    global timeDifference
+    logger.info("  _____  __    __  _____    _____  __    __ ")
+    logger.info(" |  _  \ \ \  / / |  _  \  /  ___| \ \  / / ")
+    logger.info(" | |_| |  \ \/ /  | |_| |  | |      \ \/ /  ")
+    logger.info(" |  ___/   \  /   |  _  /  | |       }  {   ")
+    logger.info(" | |       / /    | | \ \  | |___   / /\ \  ")
+    logger.info(" |_|      /_/     |_|  \_\ \_____| /_/  \_\ v3.0.0")
+    logger.info(" __________________________________________")
+    logger.info("")
+    logger.info(" GitHub: https://github.com/cwebbtw/pyRCX")
+    logger.info(" __________________________________________")
+    logger.info("")
 
-    print("*** Loading pyRCX 3.0.0, checking settings\r\n")
-
-    pyRCXsetup()
+    logger.info("Loading configuration")
 
     statistics.load()
 
-    # TODO remove this
-    GetUsers()
-
-    settings()
-
-    print("*** Settings loaded, now trying to start your server on the ports you specified\r\n")
+    load_nickserv_database()
+    load_channel_history()
 
     rehash()
+
+    logger.info("Configuration loaded")
 
     SetupListeningSockets()
 

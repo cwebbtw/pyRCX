@@ -17,9 +17,14 @@ class ChannelTest(unittest.TestCase):
     def setUp(self):
         logging.basicConfig(stream=sys.stdout, level=logging.ERROR)
 
+        server.statistics = MagicMock()
+
     def test_write_users_should_save_channel(self):
         # Given
         server_context: ServerContext = ServerContext()
+
+        server_context.configuration.channels_database_file = "/tmp/channels.dat"
+
         server.server_context = server_context
 
         channel_information = server.Channel(server_context, MagicMock(), "#somewhere", "", "")
@@ -37,7 +42,7 @@ class ChannelTest(unittest.TestCase):
         server_context.channel_entries = {}
 
         # Then
-        server.settings()
+        server.load_channel_history()
 
         expected_channel: server.Channel = server_context.channel_entries["#somewhere"]
 

@@ -1,6 +1,9 @@
 import logging
 import time
 
+from pyRCX.configuration import Configuration
+
+
 class Statistics:
     """
     A class representing statistics, which maintains running counts of totals and statistics
@@ -11,6 +14,7 @@ class Statistics:
     server_launch = time.strftime(" :On-line since %A %B %d %H:%M:%S %Y", time.localtime())
 
     def __init__(self, server_context):
+        self._configuration: Configuration = server_context.configuration
         self._invisible_client_entries = server_context.invisible_client_entries
         self._nickname_to_client_mapping_entries = server_context.nickname_to_client_mapping_entries
         self._operator_entries = server_context.operator_entries
@@ -71,13 +75,14 @@ class Statistics:
         return len(self._channel_entries)
 
     def save(self):
-        with open("database/users.dat", "w") as file:
+        with open(self._configuration.users_database_file, "w") as file:
             file.write(f"{self.max_local_users()}")
 
     def load(self):
         try:
-            with open("database/users.dat", "r") as file:
+            with open(self._configuration.users_database_file, "r") as file:
                 self._max_local = int(file.read().strip() or 0)
         except IOError as e:
-            self.logger.warning(e)
+            self.logger.info("User database not found, it will be created at save points")
+            self.logger.debug(e)
             self._max_local = 0

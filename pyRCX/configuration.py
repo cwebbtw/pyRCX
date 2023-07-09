@@ -13,6 +13,14 @@ class Configuration:
     _DEFAULT_PROFANITY = []
     _DEFAULT_FLOODING_EXEMPT_COMMANDS = []
 
+    _DEFAULT_CHANNELS_DATABASE = "database/channels.dat"
+    _DEFAULT_ACCESS_DATABASE = "database/access.dat"
+    _DEFAULT_USERS_DATABASE = "database/users.dat"
+    _DEFAULT_NICKSERV_DATABASE = "database/nickserv.dat"
+
+    _DEFAULT_MOTD_CONFIG = "conf/motd.conf"
+    _DEFAULT_SERVER_CONFIG = "conf/pyRCX.conf"
+
     def __init__(self):
         self.channel_lockdown: int = Configuration._DEFAULT_CHANNEL_LOCKDOWN
         self.channel_prefix: str = Configuration._DEFAULT_CHANNEL_PREFIX
@@ -23,3 +31,11 @@ class Configuration:
         self.server_name: str = Configuration._DEFAULT_SERVER_NAME
         self.profanity_entries: List[str] = Configuration._DEFAULT_PROFANITY
         self.flooding_exempt_commands: List[str] = Configuration._DEFAULT_FLOODING_EXEMPT_COMMANDS
+
+        self.channels_database_file: str = Configuration._DEFAULT_CHANNELS_DATABASE
+        self.access_database_file: str = Configuration._DEFAULT_ACCESS_DATABASE
+        self.users_database_file: str = Configuration._DEFAULT_USERS_DATABASE
+        self.nickserv_database_file: str = Configuration._DEFAULT_NICKSERV_DATABASE
+
+        self.motd_config_file: str = Configuration._DEFAULT_MOTD_CONFIG
+        self.server_config_file: str = Configuration._DEFAULT_SERVER_CONFIG
