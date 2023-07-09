@@ -109,11 +109,11 @@ class Raw:
 
         if param2 == "301":
             param1.send(
-                ":" + self.configuration.server_name + " 301 " + param3 + " " + param4._nickname + " " + param4._away + "\r\n")
+                ":" + self.configuration.server_name + " 301 " + param3 + " " + param4.nickname + " " + param4._away + "\r\n")
 
         if param2 == "302":
             param1.send(
-                ":" + self.configuration.server_name + " 302 " + param3 + " :" + param4._nickname + "=+" + param4._username + "@" +
+                ":" + self.configuration.server_name + " 302 " + param3 + " :" + param4.nickname + "=+" + param4._username + "@" +
                 (param4.details[0] if param5 else param4._hostmask) + "\r\n")
 
         if param2 == "303":
@@ -127,37 +127,37 @@ class Raw:
 
         if param2 == "307":
             param1.send(
-                ":" + self.configuration.server_name + " 307 " + param3 + " " + param4._nickname + " :is registered to services\r\n")
+                ":" + self.configuration.server_name + " 307 " + param3 + " " + param4.nickname + " :is registered to services\r\n")
 
         if param2 == "311":
             param1.send(
-                ":" + self.configuration.server_name + " 311 " + param3 + " " + param4._nickname + " " + param4._username + " " + param4._hostmask +
+                ":" + self.configuration.server_name + " 311 " + param3 + " " + param4.nickname + " " + param4._username + " " + param4._hostmask +
                 " * :" + param4._fullname + "\r\n")
 
         if param2 == "312":
             param1.send(
-                ":" + self.configuration.server_name + " 312 " + param3 + " " + param4._nickname + " " + param4._server + " :" + self.configuration.network_name + "\r\n")
+                ":" + self.configuration.server_name + " 312 " + param3 + " " + param4.nickname + " " + param4._server + " :" + self.configuration.network_name + "\r\n")
 
         if param2 == "313":
             if "A" in param5:
-                param1.send(":" + self.configuration.server_name + " 313 " + param3 + " " + param4._nickname +
+                param1.send(":" + self.configuration.server_name + " 313 " + param3 + " " + param4.nickname +
                             " :is the Network Administrator\r\n")
 
             elif "O" in param5:
-                param1.send(":" + self.configuration.server_name + " 313 " + param3 + " " + param4._nickname +
+                param1.send(":" + self.configuration.server_name + " 313 " + param3 + " " + param4.nickname +
                             " :is a Server Administrator\r\n")
 
             elif "a" in param5:
-                param1.send(":" + self.configuration.server_name + " 313 " + param3 + " " + param4._nickname +
+                param1.send(":" + self.configuration.server_name + " 313 " + param3 + " " + param4.nickname +
                             " :is a System Chat Manager\r\n")
 
             elif "o" in param5:
-                param1.send(":" + self.configuration.server_name + " 313 " + param3 + " " + param4._nickname +
+                param1.send(":" + self.configuration.server_name + " 313 " + param3 + " " + param4.nickname +
                             " :is a System Operator\r\n")
 
             if "g" in param5:
                 param1.send(
-                    ":" + self.configuration.server_name + " 313 " + param3 + " " + param4._nickname + " :is a Guide\r\n")
+                    ":" + self.configuration.server_name + " 313 " + param3 + " " + param4.nickname + " :is a Guide\r\n")
 
         if param2 == "315":
             param1.send(":" + self.configuration.server_name + " 315 " + param3 + " " + param4 + " :End of /WHO list.\r\n")
@@ -168,7 +168,7 @@ class Raw:
 
         if param2 == "317":
             param1.send(
-                ":" + self.configuration.server_name + " 317 " + param3 + " " + param4._nickname + " " +
+                ":" + self.configuration.server_name + " 317 " + param3 + " " + param4.nickname + " " +
                 str(max(int(time.time()) - param4._idletime, 0)) + " " + str(param4._signontime) +
                 " :seconds idle, signon time\r\n")
 
@@ -177,12 +177,12 @@ class Raw:
 
         if param2 == "319":
             param1.send(
-                ":" + self.configuration.server_name + " 319 " + param3 + " " + param4._nickname + " :" + param5 + "\r\n")
+                ":" + self.configuration.server_name + " 319 " + param3 + " " + param4.nickname + " :" + param5 + "\r\n")
 
         if param2 == "320":
             if param4._friendlyname:
                 param1.send(
-                    ":" + self.configuration.server_name + " 320 " + param3 + " " + param4._nickname + " :" + param4._friendlyname + "\r\n")
+                    ":" + self.configuration.server_name + " 320 " + param3 + " " + param4.nickname + " :" + param4._friendlyname + "\r\n")
 
         if param2 == "321":
             param1.send(":" + self.configuration.server_name + " 321 " + param3 + " Channel :Users  Name\r\n")
@@ -258,7 +258,7 @@ class Raw:
         if param2 == "378":
             if param5:
                 param1.send(
-                    ":" + self.configuration.server_name + " 378 " + param3 + " " + param4._nickname + " :is connecting from " +
+                    ":" + self.configuration.server_name + " 378 " + param3 + " " + param4.nickname + " :is connecting from " +
                     param4.details
                     [0] + "\r\n")
 
@@ -448,10 +448,10 @@ class Raw:
             param1.send(":%s 820 %s %s %s :Clear\r\n" % (self.configuration.server_name, param3, param4, param5))
 
         # if param2 == "821":
-        # param1.send(":%s 821 :User unaway\r\n" % (param3._nickname))
+        # param1.send(":%s 821 :User unaway\r\n" % (param3.nickname))
 
         # if param2 == "822":
-        # param1.send(":%s 822 :%s\r\n" % (param3._nickname,param3._away))
+        # param1.send(":%s 822 :%s\r\n" % (param3.nickname,param3._away))
 
         if param2 == "900":
             param1.send(":%s 900 %s %s :Bad command\r\n" % (self.configuration.server_name, param3, param4))

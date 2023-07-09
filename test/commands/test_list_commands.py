@@ -18,8 +18,8 @@ class ListCommandsTest(unittest.TestCase):
         self.server_context: ServerContext = ServerContext()
         self.raw_messages = Mock()
         self.user: User = User(self.server_context.configuration)
-        self.user._nickname = "Christopher"
-        self.server_context.add_user(self.user._nickname, self.user)
+        self.user.nickname = "Christopher"
+        self.server_context.add_user(self.user.nickname, self.user)
 
     def test_list_returns_channel(self):
         channel_name = "#SoMeWheRe1"
@@ -30,5 +30,5 @@ class ListCommandsTest(unittest.TestCase):
         list_command: ListCommand = ListCommand(self.server_context, self.raw_messages)
         list_command.execute(self.user, ["LIST"])
 
-        self.raw_messages.raw.assert_any_call(self.user, "322", self.user._nickname, channel_name, "1", "")
+        self.raw_messages.raw.assert_any_call(self.user, "322", self.user.nickname, channel_name, "1", "")
 

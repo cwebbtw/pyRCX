@@ -26,7 +26,7 @@ class NickServTest(unittest.TestCase):
         # Given
         client = server.ClientConnecting(None, ["details1"], None)
         client._username = "~ABCDE0123456789"
-        client._nickname = "sample_nickname1"
+        client.nickname = "sample_nickname1"
 
         email = "email1@email.com"
 
@@ -36,7 +36,7 @@ class NickServTest(unittest.TestCase):
         # When
         server.Nickserv_function(client, parameters, message_type)
 
-        nickserv_entry = server.server_context.nickserv_entries[client._nickname]
+        nickserv_entry = server.server_context.nickserv_entries[client.nickname]
 
         # Then
         self.assertEqual(nickserv_entry._email, email)
@@ -47,14 +47,14 @@ class NickServTest(unittest.TestCase):
 
         client = server.ClientConnecting(None, ["details2"], None)
         client._username = "~ABCDE0123456789"
-        client._nickname = group_owner_nickname
+        client.nickname = group_owner_nickname
 
         parameters = ["NICKSERV", "REGISTER", "password", "email2@email.com"]
         message_type = "PRIVMSG"
 
         server.Nickserv_function(client, parameters, message_type)
 
-        client._nickname = "sample_nickname3"
+        client.nickname = "sample_nickname3"
 
         parameters = ["NICKSERV", "GROUP", group_owner_nickname, "password"]
 
@@ -64,13 +64,13 @@ class NickServTest(unittest.TestCase):
         nickserv_entry = server.server_context.nickserv_entries[group_owner_nickname]
 
         # Then
-        self.assertEqual(nickserv_entry.grouped_nicknames, [client._nickname])
+        self.assertEqual(nickserv_entry.grouped_nicknames, [client.nickname])
 
     def test_identify_registered_nickname(self):
         # Given
         client = server.ClientConnecting(None, ["details3"], None)
         client._username = "~ABCDE0123456789"
-        client._nickname = "sample_nickname4"
+        client.nickname = "sample_nickname4"
 
         parameters = ["NICKSERV", "REGISTER", "password", "email3@email.com"]
         message_type = "PRIVMSG"
@@ -79,7 +79,7 @@ class NickServTest(unittest.TestCase):
 
         client = server.ClientConnecting(None, ["details3"], None)
         client._username = "~ABCDE0123456789"
-        client._nickname = "sample_nickname4"
+        client.nickname = "sample_nickname4"
 
         parameters = ["NICKSERV", "IDENTIFY", "password"]
 
@@ -93,7 +93,7 @@ class NickServTest(unittest.TestCase):
         # Given
         client = server.ClientConnecting(None, ["details3"], None)
         client._username = "~ABCDE0123456789"
-        client._nickname = "sample_nickname4"
+        client.nickname = "sample_nickname4"
 
         parameters = ["NICKSERV", "REGISTER", "password", "email3@email.com"]
         message_type = "PRIVMSG"
@@ -102,7 +102,7 @@ class NickServTest(unittest.TestCase):
 
         client = server.ClientConnecting(None, ["details3"], None)
         client._username = "~ABCDE0123456789"
-        client._nickname = "sample_nickname4"
+        client.nickname = "sample_nickname4"
 
         parameters = ["NICKSERV", "IDENTIFY", "wrongpassword"]
 

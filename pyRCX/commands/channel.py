@@ -23,9 +23,9 @@ class PartCommand(Command):
         for channel_name in parameters[1].split(","):
             chan = self._server_context.get_channel(channel_name)
             if chan:
-                chan.part(user._nickname)
+                chan.part(user.nickname)
             else:
-                self._raw_messages.raw(user, "403", user._nickname, channel_name)
+                self._raw_messages.raw(user, "403", user.nickname, channel_name)
 
 
 class JoinCommand(Command):
@@ -43,29 +43,29 @@ class JoinCommand(Command):
         for channel_name in parameters[1].split(","):
 
             if user.has_reached_max_channels():
-                self._raw_messages.raw(user, "405", user._nickname, channel_name)
+                self._raw_messages.raw(user, "405", user.nickname, channel_name)
             else:
                 channel = self._channel_entries.get(channel_name.lower(), None)
                 if channel:
                     if channel.MODE_key != "":
                         if len(parameters) > 2:
                             if parameters[2] == channel.MODE_key:
-                                channel.join(user._nickname, parameters[2])
+                                channel.join(user.nickname, parameters[2])
                             elif parameters[2] == channel._prop.ownerkey:
-                                if user._nickname.lower() not in channel._owner:
-                                    if user._nickname.lower() not in channel._users:
-                                        channel._owner.append(user._nickname.lower())
+                                if user.nickname.lower() not in channel._owner:
+                                    if user.nickname.lower() not in channel._users:
+                                        channel._owner.append(user.nickname.lower())
 
-                                channel.join(user._nickname, parameters[2])
+                                channel.join(user.nickname, parameters[2])
 
                             elif parameters[2] == channel._prop.hostkey:
-                                if user._nickname.lower() not in channel._op and user._nickname.lower() not in channel._users:
-                                    channel._op.append(user._nickname.lower())
-                                channel.join(user._nickname, parameters[2])
+                                if user.nickname.lower() not in channel._op and user.nickname.lower() not in channel._users:
+                                    channel._op.append(user.nickname.lower())
+                                channel.join(user.nickname, parameters[2])
 
                             else:
                                 # send error to  user
-                                self._raw_messages.raw(user, "475", user._nickname,
+                                self._raw_messages.raw(user, "475", user.nickname,
                                                        channel.channelname)
                                 if channel.MODE_knock:
                                     for each in channel._users:  # need to check for knock mode
@@ -74,45 +74,45 @@ class JoinCommand(Command):
                                         if each_channel_user:
                                             each_channel_user.send(
                                                 ":%s!%s@%s KNOCK %s 475\r\n" %
-                                                (user._nickname, user._username, user._hostmask, channel.channelname))
+                                                (user.nickname, user._username, user._hostmask, channel.channelname))
 
-                        elif user._nickname.lower() in self._operator_entries:
-                            channel.join(user._nickname)
+                        elif user.nickname.lower() in self._operator_entries:
+                            channel.join(user.nickname)
 
                         else:
                             # send error to  user
-                            self._raw_messages.raw(user, "475", user._nickname,
+                            self._raw_messages.raw(user, "475", user.nickname,
                                                    channel.channelname)
                             if channel.MODE_knock:
                                 for each in channel._users:  # need to check for knock mode
                                     each_channel_user = self._nickname_to_client_mapping_entries.get(each.lower(), None)
                                     each_channel_user.send(
                                         ":%s!%s@%s KNOCK %s 475\r\n" %
-                                        (user._nickname, user._username, user._hostmask,
+                                        (user.nickname, user._username, user._hostmask,
                                          channel.channelname))
 
 
                     elif len(parameters) > 2:
                         if parameters[2] == channel._prop.ownerkey:
-                            if user._nickname.lower() not in channel._owner and user._nickname.lower() not in channel._users:
-                                channel._owner.append(user._nickname.lower())
+                            if user.nickname.lower() not in channel._owner and user.nickname.lower() not in channel._users:
+                                channel._owner.append(user.nickname.lower())
 
                         elif parameters[2] == channel._prop.hostkey:
-                            if user._nickname.lower() not in channel._op and user._nickname.lower() not in channel._users:
-                                channel._op.append(user._nickname.lower())
+                            if user.nickname.lower() not in channel._op and user.nickname.lower() not in channel._users:
+                                channel._op.append(user.nickname.lower())
 
-                        channel.join(user._nickname, parameters[2])
+                        channel.join(user.nickname, parameters[2])
                     else:
-                        channel.join(user._nickname)
+                        channel.join(user.nickname)
                 else:
                     if len(self._channel_entries) >= self._configuration.max_channels:
-                        self._raw_messages.raw(user, "710", user._nickname, self._configuration.max_channels)
+                        self._raw_messages.raw(user, "710", user.nickname, self._configuration.max_channels)
 
                     elif self._configuration.channel_lockdown == 1:
-                        self._raw_messages.raw(user, "702", user._nickname)
+                        self._raw_messages.raw(user, "702", user.nickname)
                     else:
                         channel = Channel(self._server_context, self._raw_messages, channel_name,
-                                          user._nickname)  # create
+                                          user.nickname)  # create
                         if channel.channelname != "":
                             self._channel_entries[channel_name.lower()] = channel
 

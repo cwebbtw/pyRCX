@@ -13,8 +13,8 @@ class ChannelCommandsTest(unittest.TestCase):
         self.server_context: ServerContext = ServerContext()
         self.raw_messages: Raw = MagicMock()
         self.user: User = User(self.server_context.configuration)
-        self.user._nickname = "Christopher"
-        self.server_context.add_user(self.user._nickname, self.user)
+        self.user.nickname = "Christopher"
+        self.server_context.add_user(self.user.nickname, self.user)
 
     def test_join_should_raise_index_error_for_not_enough_parameters(self):
         join_command: JoinCommand = JoinCommand(self.server_context, self.raw_messages)
