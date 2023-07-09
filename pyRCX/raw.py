@@ -26,7 +26,7 @@ class Raw:
 
         if param2 == "002":
             param1.send(
-                ":" + self.configuration.server_name + " 002 " + param3 + " :Your host is " + param4 + ", running version 3.0.0\r\n")
+                ":" + self.configuration.server_name + " 002 " + param3 + " :Your host is " + param4 + ", running version " + self.configuration.VERSION + "\r\n")
 
         if param2 == "003":
             param1.send(":" + self.configuration.server_name + " 003 " + param3 + " :This server was created on %s\r\n" %
@@ -34,7 +34,7 @@ class Raw:
 
         if param2 == "004":
             param1.send(":" + self.configuration.server_name + " 004 " + param3 + " " + param4 +
-                        " pyRCX 3.0.0 abAfghiInoOpPrwzX aAbcCdefGhikKlmMnNopPqQrRsStTuvwxXZ\r\n")
+                        " pyRCX " + self.configuration.VERSION + " abAfghiInoOpPrwzX aAbcCdefGhikKlmMnNopPqQrRsStTuvwxXZ\r\n")
 
         if param2 == "005":
             if "IRCX" in self.disabled_functionality:
@@ -86,7 +86,7 @@ class Raw:
 
         if param2 == "257":
             # display if operators available
-            param1.send(":" + self.configuration.server_name + " 257 " + param3 + " :pyRCX version 3.0.0, see /CREDITS\r\n")
+            param1.send(":" + self.configuration.server_name + " 257 " + param3 + " :pyRCX version " + self.configuration.VERSION + ", see /CREDITS\r\n")
 
         if param2 == "258":
             param1.send(":" + self.configuration.server_name + " 258 " + param3 + " :" + param4 + "\r\n")
@@ -238,7 +238,7 @@ class Raw:
         if param2 == "371":
             param1.send(
                 ":" + self.configuration.server_name + " 371 " + param3 + " :" + param4 + "communication service "
-                                                                            "3.0.0\r\n:" +
+                                                                            + self.configuration.VERSION + "\r\n:" +
                 self.configuration.server_name + " 371 " + param3 + self.statistics.server_launch + "\r\n")
 
         if param2 == "372":
@@ -517,8 +517,8 @@ class Raw:
 
         if param2 == "955":
             param1.send(
-                ":%s 955 %s :\x02Credits - pyRCX networking chat service 3.0.0\x02\r\n:%s 955 %s :Christopher Webb\r\n" %
-                (self.configuration.server_name, param3, self.configuration.server_name, param3))
+                ":%s 955 %s :\x02Credits - pyRCX networking chat service %s\x02\r\n:%s 955 %s :Christopher Webb\r\n" %
+                (self.configuration.server_name, param3, self.configuration.VERSION, self.configuration.server_name, param3))
             param1.send(":%s 955 %s :-\r\n" % (self.configuration.server_name, param3))
             param1.send(
                 ":%s 955 %s :\x02With thanks to:\x02\r\n:%s 955 %s :Darren Davies, Rob Lancaster, Kevin Deveau, "

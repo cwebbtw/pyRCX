@@ -21,6 +21,8 @@ class Configuration:
     _DEFAULT_MOTD_CONFIG = "conf/motd.conf"
     _DEFAULT_SERVER_CONFIG = "conf/pyRCX.conf"
 
+    VERSION = "v3.0.1"
+
     def __init__(self):
         self.channel_lockdown: int = Configuration._DEFAULT_CHANNEL_LOCKDOWN
         self.channel_prefix: str = Configuration._DEFAULT_CHANNEL_PREFIX

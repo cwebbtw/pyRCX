@@ -5,6 +5,7 @@ import socket
 import sys
 import threading
 import time
+import traceback
 from copy import copy
 from hashlib import sha256
 from pickle import dumps, loads
@@ -553,6 +554,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
         self._welcome = False
         self._idletime = int(GetEpochTime())
 
+        self.logger = logging.getLogger('CLIENT_THREAD')
+
         threading.Thread.__init__(self)
 
     def close(self):
@@ -784,10 +787,10 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
     def run(self):
         server_context.unknown_connection_entries.add(self)
         connections.append(self)
-        print("*** Connection accepted from '", self.details[0], "' users[", str(len(connections)), "/", MaxUsers, "]")
+        self.logger.debug(f"Connection accepted from '{self.details[0]}' users [{len(connections)}/{MaxUsers}]")
 
         if str(len(connections) - 1) == str(MaxUsers):
-            print("*** Connection closed '", self.details[0], "', server is full")
+            self.logger.debug("Connection closed '", self.details[0], "', server is full")
             self.send(
                 ":" + server_context.configuration.server_name + " NOTICE AUTH :*** Sorry, this server is full, you can try reconnecting\r\n")
             self.send("ERROR :Closing Link: %s (Server is full)\r\n" % (self.details[0]))
@@ -822,7 +825,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
             if str(MaxUsersPerConnection) == str(
                     calcuseramount) and ipaddress != userdetails and exemptFromConnectionKiller == False:
                 server_context.unknown_connection_entries.remove(self)
-                print("*** Connection closed '", self.details[0], "', too many connections")
+                self.logger.debug("Connection closed '", self.details[0], "', too many connections")
 
                 self.send(
                     ":" + server_context.configuration.server_name + " NOTICE AUTH :*** Sorry, your client is restricted to %d clones\r\n" %
@@ -842,7 +845,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                             self.send(
                                 ":" + server_context.configuration.server_name + " NOTICE AUTH :*** Found your hostname\r\n")
                         else:
-                            someerror
+                            raise Exception
                     except:
                         self._hostname = self.details[0]
                         self.send(
@@ -963,15 +966,14 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                 param[0] = param[0].upper()
                             else:
                                 param = [""]
-
-                    except:
+                    except IndexError:
                         pass
 
-                    # print "data" + strdata
+                    except:
+                        self.logger.debug(traceback.format_exc())
 
-                    # print "message starts"
-                    print(param)
-                    # print "message ends"
+                    self.logger.debug(f"[{','.join(param)}]")
+                    
                     _sleep = "%.4f" % (random() / 9)
                     _disabled = self._isDisabled(param[0])
                     if param[0].upper() != "NOTICE" and param[0].upper() != "PRIVMSG" and param[0].upper() != "JOIN" and \
@@ -993,7 +995,6 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                 self.lastcommand = int(GetEpochTime())
 
                                 if self.flooding == 20:  # 15 commands per 1000 miliseconds, anymore than that will kill the user
-                                    print("Input flooding!!")
                                     self.quittype = 4
                                     self.send("ERROR :Closing Link: " + self.details[0] + " (Input flooding)\r\n")
                                     self.die = True
@@ -3479,18 +3480,14 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                             else:
                                 raw_messages.raw(self, "451", self._nickname)
 
-                    except IndexError as e:
-                        import traceback
-
-                        print(traceback.format_exc())
+                    except IndexError:
                         raw_messages.raw(self, "461", self._nickname, param[0])
 
-                    # except:
-                    # tuError = sys.exc_info()
-                    # self._reportError(tuError)
+                    except Exception as e:
+                        self.logger.error(traceback.format_exc())
 
         try:
-            print("*** Connection closed from '", self.details[0], "'", self._nickname, "left the server")
+            self.logger.info(f"Connection closed from '{self.details[0]}', {self._nickname} left the server")
             quit = ""
 
             if self.quittype == 0:
@@ -3555,12 +3552,9 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                         " QUIT :Nickname collision on server link\r\n")
 
                                             except:
-                                                pass
-                        del temp
+                                                self.logger.debug(traceback.format_exc())
                     except:
-                        print("uh oh bug")
-
-                del sendto
+                        self.logger.error(traceback.format_exc())
 
             temp_opers = dict(server_context.operator_entries)
             for each in temp_opers:
@@ -5873,12 +5867,14 @@ def load_channel_history():  # this is information such as channels, max users e
                         if s_founder != "":
                             _addrec = access_helper.AddRecord("", chanclass.channelname.lower(), "OWNER", _founder, 0, "")
     except Exception as e:
+        logger.info("No channel history found")
         logger.debug(e)
 
     try:
         with open(server_context.configuration.access_database_file, 'rb') as file:
              server_context.server_access_entries = loads(file.read())
     except Exception as e:
+        logger.info("No access entries history found")
         logger.debug(e)
         server_context.server_access_entries = []
 
@@ -5939,7 +5935,7 @@ def SetupListeningSockets():
 import logging
 
 def start():
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
     logger = logging.getLogger('START')
 
@@ -5948,7 +5944,7 @@ def start():
     logger.info(" | |_| |  \ \/ /  | |_| |  | |      \ \/ /  ")
     logger.info(" |  ___/   \  /   |  _  /  | |       }  {   ")
     logger.info(" | |       / /    | | \ \  | |___   / /\ \  ")
-    logger.info(" |_|      /_/     |_|  \_\ \_____| /_/  \_\ v3.0.0")
+    logger.info(" |_|      /_/     |_|  \_\ \_____| /_/  \_\ " + server_context.configuration.VERSION)
     logger.info(" __________________________________________")
     logger.info("")
     logger.info(" GitHub: https://github.com/cwebbtw/pyRCX")
