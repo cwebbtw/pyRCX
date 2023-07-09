@@ -1,11 +1,22 @@
+import logging
 from abc import abstractmethod
 
+from pyRCX.configuration import Configuration
 
-class ClientBaseClass:
+
+class UserException(Exception):
+
+    def __init__(self, message: str):
+        self.message = message
+
+
+class User:
     """
     Major refactor required
     """
-    def __init__(self, _servername):
+
+    def __init__(self, configuration: Configuration):
+        self._configuration = configuration
         self._access = []
         self._nickamount = 0
         self._nicklock = 0
@@ -29,12 +40,19 @@ class ClientBaseClass:
         self._fullname = ""
         self._hostmask = ""
         self._hostname = ""
-        self._server = _servername
+        self._server = self._configuration.server_name
         self._signontime = 0
         self._idletime = 0
         self._watch = []
         self.details = ["", ""]
         self._friendlyname = ""
+
+    def has_reached_max_channels(self) -> bool:
+        return len(self._channels) >= self._configuration.max_channels_per_user
+
+    def join(self, channel):
+        if not self.has_reached_max_channels():
+            self._channels.append(channel)
 
     # TODO this should not be on the clientbase class and this needs to be
     # renamed and removed from a hierarchical sense

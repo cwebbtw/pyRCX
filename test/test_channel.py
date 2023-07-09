@@ -1,8 +1,11 @@
 import logging
 import unittest
 import sys
+from unittest.mock import MagicMock
 
 from pyRCX import server
+from pyRCX.prop import Prop
+from pyRCX.server_context import ServerContext
 
 
 class ChannelTest(unittest.TestCase):
@@ -14,26 +17,34 @@ class ChannelTest(unittest.TestCase):
     def setUp(self):
         logging.basicConfig(stream=sys.stdout, level=logging.ERROR)
 
+        server.statistics = MagicMock()
+
     def test_write_users_should_save_channel(self):
         # Given
-        channel_information = server.Channel("#somewhere", "", "")
+        server_context: ServerContext = ServerContext()
+
+        server_context.configuration.channels_database_file = "/tmp/channels.dat"
+
+        server.server_context = server_context
+
+        channel_information = server.Channel(server_context, MagicMock(), "#somewhere", "", "")
         channel_information.MODE_registered = True
         channel_information.MODE_private = True
 
-        channel_information._prop = server.Prop("chris", None)
+        channel_information._prop = Prop("chris", None)
         channel_information._prop.onjoin = "welcome"
 
-        server.channel_entries = {"#somewhere": channel_information}
+        server_context.channel_entries = {"#somewhere": channel_information}
 
         # When
         server.WriteUsers(False, True, False)
 
-        server.channel_entries = {}
+        server_context.channel_entries = {}
 
         # Then
-        server.settings()
+        server.load_channel_history()
 
-        expected_channel: server.Channel = server.channel_entries["#somewhere"]
+        expected_channel: server.Channel = server_context.channel_entries["#somewhere"]
 
         self.assertTrue(expected_channel.MODE_registered)
         self.assertTrue(expected_channel.MODE_private)
