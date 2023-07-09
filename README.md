@@ -68,26 +68,38 @@ Note that ChanServ is not supported and should not be required given ACCESS and 
 
 ##### Channel Modes (/mode channel + or -) eg: /mode #channel +o b0rg
 You can set up to 20 modes, eg: /mode #channel +ooooooooooo-vvvvvvvv name1 name2 name3...
+- `a - "Authenticated Only" - Only authenticated clients may join.`
+- `A - "Admin Only" - Only Admins (non-sysop and guides) may enter the channel`
 - `b - "Ban" - Can be used to get a list of ban (ACCESS DENY) entries.`
+- `c - "No colors" - Colors are disallowed and message blocked.`
+- `C - "Strip Colors" - Colors, bold, etc are removed from messages`
 - `d - "Cloneable" - When the room fills up, a new room will be created with the same name, plus a number between 1 and 99. Cannot be set by normal users. #x becomes #x01 #x02 etc.`
 - `e - "Clone" - This room is a clone of a room that is set to mode +d. Cannot be set by normal users. #x01 gets mode +e to tell clients it's not the original channel.`
 - `f - "Filter" - IRCX's built-in profanity filter is being used. Can only be set during room creation.`
-- `g - "Special Guest" - Puts the IRCX Chat control in to special guest chat mode. Used in OnStage. Cannot be set by normal users. This would set the channel as an 'Event' Channel.`
+- `G - "Gag on ban" - Banned users can't talk`
 - `h - "Hidden" - Room is not shown on any sort of room listings. Same as +s, can't be used with +p or +s.`
 - `i - "Invite" - Room is set as invite only.`
 - `k - "Key" - Room has an entry password set. Same as PROP MEMBERKEY. /join #channel key`
 - `l - "Limit" - Room has a user limit set. Anything above 100 users must be set during room creation and may not actually be enforced.`
 - `m - "Moderated" - Users in the room can be "specced", or set mode -v, and they cannot speak.`
+- `M - "Owneronly Modes" - Only owners can /mode"`
 - `n - "No External Messages" - Only people that are actually in the room, can speak in the room. If -n, you can talk in the room without actually being there.`
+- `N - "Service Channel" - Services channel, only operators and services may utilize.`
 - `p - "Private" - Room is not shown on the room listings, and you can only find out the amount of people in the room and the name. Cannot be used with +h or +s. Only shows #name in /list and /listx`
+- `P - "Owner ACL Only" - Only chan owners can set /access"`
+- `Q - "Owner Kick" - Owners can not /kick each other.`
 - `r - "Registered" - Official registered room, doesn't delete if empty.`
+- `R - "Registered Only" - Only registered users may join.`
+- 
 - `s - "Secret" - Room is not shown on any sort of room listings. Same as +h, cannot be used with +h or +p.`
-- `S - "Subscriber" - Only subscribers (paid clients) are allowed to speak in the room. Cannot be set by normal users.`
+- `S - "No Mode Changes" - Modes are locked upon channel creation..`
 - `t - "Only Hosts Set Topic" - Only a host, owner, or MSN official can change the room topic. If -t, any user can change the topic.`
-- `u - "Knock" - When someone can't get into the room for whatever reason, all hosts recieve a message stating so, though the MSN Chat Control does not display the message.`
-- `w - "No Whispers" - Normal users cannot whisper non-hosts. Note that this is a lowercase w.`
+- `T - "Owner /Topic Only" - Only owners can change the channel topic.`
+- `u - "Knock" - When someone can't get into the room for whatever reason, all hosts recieve a message stating so.`
+- `w - "No Whispers" - Normal users cannot whisper non-hosts.`
 - `W - "No Guest Whispers" - (Non-registered) Guests cannot whisper non-hosts. Note that this is an UPPERCASE W.`
 - `x - "Auditorium Mode" - Normal users cannot see each other in the room and can only see hosts, while hosts can see everyone. Cannot be set by normal users.`
+- `Z - "NO IRCx" - Only clients that utilize regular IRC can join`
 
 ##### Whisper vs PRIVMSG (/query)
 `/whisper channel nickname :message`
