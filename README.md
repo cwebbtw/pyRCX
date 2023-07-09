@@ -79,7 +79,7 @@ You can set up to 20 modes, eg: /mode #channel +ooooooooooo-vvvvvvvv name1 name2
 - `l - "Limit" - Room has a user limit set. Anything above 100 users must be set during room creation and may not actually be enforced.`
 - `m - "Moderated" - Users in the room can be "specced", or set mode -v, and they cannot speak.`
 - `n - "No External Messages" - Only people that are actually in the room, can speak in the room. If -n, you can talk in the room without actually being there.`
-- `p - "Private" - Room is not shown on the room listings, and you can only find out the amount of people in the room and the name. Cannot be used with +h or +s. Only shows #name in /list and /listx``
+- `p - "Private" - Room is not shown on the room listings, and you can only find out the amount of people in the room and the name. Cannot be used with +h or +s. Only shows #name in /list and /listx`
 - `r - "Registered" - Official registered room, doesn't delete if empty.`
 - `s - "Secret" - Room is not shown on any sort of room listings. Same as +h, cannot be used with +h or +p.`
 - `S - "Subscriber" - Only subscribers (paid clients) are allowed to speak in the room. Cannot be set by normal users.`
