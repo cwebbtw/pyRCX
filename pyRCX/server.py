@@ -12,10 +12,9 @@ from pickle import dumps, loads
 from random import random
 from select import select
 from traceback import extract_tb
-from typing import Dict, List
+from typing import Dict
 from zlib import compress, decompress
 
-from .access import AccessInformation
 from .channel import Channel
 from .commands.channel import JoinCommand, PartCommand
 from .commands.list import ListCommand
@@ -1834,11 +1833,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                 else:
                                                                     floodtime = 2000
 
-                                                                # let's work in ms shall we?
-                                                                if int((
-                                                                               GetEpochTime() - self.pmlastcommand) * 1000) <= floodtime:
-                                                                    if param[
-                                                                        1].lower() in server_context.channel_entries:
+                                                                if int((time.time() - self.pmlastcommand) * 1000) <= floodtime:
+                                                                    if param[1].lower() in server_context.channel_entries:
                                                                         self.pmflooding += 1
 
                                                                 else:
@@ -2606,7 +2602,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._prop._client(chanid, self, param[3])
+                                                    chanid._client(self, param[3])
 
                                             elif param[2].upper() == "SUBJECT":
                                                 if len(param) == 3:
@@ -2619,7 +2615,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._prop._subject(chanid, self, param[3])
+                                                    chanid._subject(self, param[3])
 
                                             elif param[2].upper() == "LAG":
                                                 if len(param) == 3:
@@ -2631,7 +2627,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._prop._lag(chanid, self, param[3])
+                                                    chanid._lag(self, param[3])
 
                                             elif param[2].upper() == "LANGUAGE":
                                                 if len(param) == 3:
@@ -2646,7 +2642,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._prop._language(chanid, self, param[3])
+                                                    chanid._language(self, param[3])
 
                                             elif param[2].upper() == "ACCOUNT":
                                                 if len(param) == 3:
@@ -2689,9 +2685,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._prop._topic(
-                                                        chanid, self, param[3],
-                                                        strdata.split(" ", 3)[3][1:])
+                                                    chanid.change_topic(self, param[3], strdata.split(" ", 3)[3][1:])
 
                                             elif param[2].upper() == "MEMBERKEY":
                                                 if len(param) == 3:
@@ -2702,7 +2696,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._prop._memberkey(chanid, self, param[3])
+                                                    chanid._memberkey(self, param[3])
 
                                             elif param[2].upper() == "HOSTKEY":
                                                 if len(param) == 3:
@@ -2717,7 +2711,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                             raw_messages.raw(self, "908", self.nickname)
                                                             pass
                                                 else:
-                                                    chanid._prop._hostkey(chanid, self, param[3])
+                                                    chanid._hostkey(self, param[3])
 
                                             elif param[2].upper() == "OWNERKEY":
                                                 if len(param) == 3:
@@ -2734,7 +2728,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                             raw_messages.raw(self, "908", self.nickname)
                                                             pass
                                                 else:
-                                                    chanid._prop._ownerkey(chanid, self, param[3])
+                                                    chanid._ownerkey(self, param[3])
 
                                             elif param[2].upper() == "REGISTERED":
                                                 if len(param) == 3:
@@ -2756,7 +2750,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._prop._name(chanid, self, param[3])
+                                                    chanid._name(self, param[3])
 
                                             elif param[2].upper() == "RESET":
                                                 if len(param) == 3:
@@ -2767,7 +2761,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._prop._reset(chanid, self, param[3])
+                                                    chanid._reset(self, param[3])
 
                                             elif param[2].upper() == "OID":
                                                 if len(param) == 3:
@@ -2803,10 +2797,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._prop._onmessage(
-                                                        chanid, self, param[3],
-                                                        strdata.split(" ", 3)[3],
-                                                        "ONJOIN")
+                                                    chanid._onmessage(self, param[3], strdata.split(" ", 3)[3], "ONJOIN")
 
                                             elif param[2].upper() == "ONPART":
                                                 if len(param) == 3:
@@ -2819,10 +2810,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._prop._onmessage(
-                                                        chanid, self, param[3],
-                                                        strdata.split(" ", 3)[3],
-                                                        "ONPART")
+                                                    chanid._onmessage(self, param[3], strdata.split(" ", 3)[3], "ONPART")
 
                                             elif param[2].upper() == "PICS":
                                                 if len(param) == 3:

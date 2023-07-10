@@ -5,7 +5,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock
 
 from pyRCX import server
-from pyRCX.prop import Prop
+from pyRCX.channel import ChannelProperties
 from pyRCX.server_context import ServerContext
 
 
@@ -32,7 +32,7 @@ class ChannelTest(unittest.TestCase):
         channel_information.MODE_registered = True
         channel_information.MODE_private = True
 
-        channel_information._prop = Prop("chris", None)
+        channel_information._prop = ChannelProperties("chris", None)
         channel_information._prop.onjoin = "welcome"
 
         server_context.channel_entries = {"#somewhere": channel_information}
@@ -51,7 +51,3 @@ class ChannelTest(unittest.TestCase):
         self.assertTrue(expected_channel.MODE_private)
         self.assertEqual(expected_channel.channelname, "#somewhere")
         self.assertEqual(expected_channel._prop.onjoin, "welcome")
-
-
-class TestPartCommand(TestCase):
-    pass
