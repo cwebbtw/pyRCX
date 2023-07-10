@@ -5,25 +5,35 @@ from pyRCX.operator import OperatorEntry
 
 
 class Configuration:
+
+    # Default channel configuration
     _DEFAULT_CHANNEL_LOCKDOWN = 0
     _DEFAULT_CHANNEL_PREFIX = "#"
     _DEFAULT_MAX_CHANNELS_PER_USER = 10
     _DEFAULT_MAX_CHANNELS = 100
     _DEFAULT_MODES = "ntl 75"
+
     _DEFAULT_SERVER_NAME = "pyRCXServ01"
     _DEFAULT_NETWORK_NAME = "pyRCXNet"
+
     _DEFAULT_DISABLED_FUNCTIONALITY = {}
     _DEFAULT_PROFANITY: List[str] = []
     _DEFAULT_FLOODING_EXEMPT_COMMANDS: List[str] = []
+
     _DEFAULT_SERVER_ADMIN_NAME = "pyRCX Admin"
     _DEFAULT_SERVER_ADMIN_ORGANISATION = "pyRCX Administration Group"
+
+    # This value will be overriden if a value in the config is specified
+    # Production servers should not leave the operator line (o:line) value empty
     _DEFAULT_OPERATOR_LINES: List[OperatorEntry] = [OperatorEntry("admin", "password", "aoAO", None)]
 
+    # Flat database files - no high availability or redundancy
     _DEFAULT_CHANNELS_DATABASE = "database/channels.dat"
     _DEFAULT_ACCESS_DATABASE = "database/access.dat"
     _DEFAULT_USERS_DATABASE = "database/users.dat"
     _DEFAULT_NICKSERV_DATABASE = "database/nickserv.dat"
 
+    # Configuration properties that can be overriden if required
     _DEFAULT_MOTD_CONFIG = "conf/motd.conf"
     _DEFAULT_SERVER_CONFIG = "conf/pyRCX.conf"
 
