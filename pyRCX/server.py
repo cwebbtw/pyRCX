@@ -5,34 +5,35 @@ import sys
 import threading
 import time
 import traceback
+
 from copy import copy
 from hashlib import sha256
 from pickle import dumps, loads
 from random import random
 from select import select
 from traceback import extract_tb
+from typing import Any
 from zlib import compress, decompress
 
 import pyRCX.access as access_helper
+
 from .channel import Channel
 from .commands.channel import JoinCommand, PartCommand, CreateCommand
 from .commands.list import ListCommand
 from .commands.topic import TopicCommand
 from .filtering import FilterEntry, Filtering
+from .helpers import int_or_zero
 from .nickserv import NickServEntry
 from .operator import OperatorEntry
 from .raw import Raw
 from .server_context import ServerContext
 from .statistics import Statistics
-# This class needs a major re-work including the nested hierarchy of threading/run methods
 from .user import User
 
 server_context: ServerContext = ServerContext()
-
 filtering: Filtering = server_context.configuration.filtering
 statistics: Statistics = Statistics(server_context)
-
-raw_messages = Raw(server_context.configuration, statistics)
+raw_messages: Raw = Raw(server_context.configuration, statistics)
 
 access_helper.initialise(server_context, raw_messages)
 
@@ -42,7 +43,6 @@ part_command: PartCommand = PartCommand(server_context, raw_messages)
 create_command: CreateCommand = CreateCommand(server_context, raw_messages)
 list_command: ListCommand = ListCommand(server_context, raw_messages)
 topic_command: TopicCommand = TopicCommand(server_context, raw_messages)
-# Here are some settings, these can be coded into the conf later I suppose
 
 character_encoding = "latin1"
 
@@ -66,7 +66,6 @@ defconMode = 1
 
 Ports = []
 temp_noopers = []
-operlines = []
 connections = []
 
 connectionsExempt = []
@@ -103,7 +102,7 @@ def WriteUsers(nicksv=True, chans=True, access=False):
     logger = logging.getLogger('PERSISTENCE')
 
     global writeUsers_lock
-    if writeUsers_lock == False:
+    if not writeUsers_lock:
         writeUsers_lock = True
         try:
             statistics.save()
@@ -139,13 +138,12 @@ def WriteUsers(nicksv=True, chans=True, access=False):
 def rehash(par=1):  # this information will be rehashed by any operator with level 4 privlidges (Administrator)
     myfile = open(server_context.configuration.server_config_file, "r")
     try:
-        global ServerAddress, connectionsExempt, operlines, Ports
+        global ServerAddress, connectionsExempt, Ports
         global MaxUsers, MaxUsersPerConnection, NickfloodAmount, NickfloodWait
         global NickservParam, ipaddress, AdminPassword, ServerPassword
         global passmsg, HostMaskingParam, HostMasking, PrefixChar, MaxServerEntries, MaxChannelEntries, MaxUserEntries
         global defconMode, UserDefaultModes
 
-        operlines = []
         Ports = []
         connectionsExempt = []
 
@@ -251,7 +249,8 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
 
             if lineStr[0] == "O":
                 s_line = lineStr.split(":")
-                operlines.append(OperatorEntry(s_line[1], s_line[2], s_line[3], s_line[4].split(";")[0]))
+                server_context.configuration.operator_lines.append(
+                    OperatorEntry(s_line[1], s_line[2], s_line[3], s_line[4].split(";")[0]))
 
             if lineStr[0] == "F":
                 s_line = lineStr.split(":")
@@ -271,19 +270,8 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
         print("Rehash error, line: " + str(line_num))
 
 
-def myint(strdata):
-    try:
-        return int(strdata)
-    except:
-        return 0
-
-
-def iif(state, stateiftrue, stateiffalse):
-    if state == "" or state == False:
-        return stateiffalse
-    else:
-        return stateiftrue
-
+def iif(state: str | bool, true_operand: Any, false_operand: Any):
+    return false_operand if state == "" or state == False else true_operand
 
 def isSecret(channel, extra="", extra2=""):
     if channel.MODE_secret:
@@ -1360,7 +1348,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                 self.send(":" + server_context.configuration.server_name +
                                                           " NOTICE STATS :*** Viewing Operator statistics '" +
                                                           param[1][0] + "' \r\n")
-                                                for oline in operlines:
+                                                for oline in server_context.configuration.operator_lines:
                                                     if "A" in oline.flags:
                                                         self.send(
                                                             ":" + server_context.configuration.server_name + " 212 " + self.nickname + " :[A] - " + oline.username + " - " + oline.flags + " (Network Administrator)\r\n")
@@ -1805,7 +1793,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                     self.die = True
                                                                     self.close()
 
-                                                                if myint(
+                                                                if int_or_zero(
                                                                         chanclass._prop.lag) != 0 and isOp(
                                                                     self.nickname.lower(),
                                                                     chanclass.channelname) == False:
@@ -2037,7 +2025,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                     if param[3].upper() == "DENY" or param[3].upper() == "GRANT" or \
                                                             param[3].upper() == "VOICE" or param[3].upper() == "HOST" or \
                                                             param[3].upper() == "OWNER":
-                                                        if len(chanid.ChannelAccess) > myint(MaxChannelEntries):
+                                                        if len(chanid.ChannelAccess) > int_or_zero(MaxChannelEntries):
                                                             raw_messages.raw(self, "916", self.nickname,
                                                                              chanid.channelname)
                                                         else:  # ACCESS # ADD OWNER
@@ -2051,7 +2039,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                             else:
                                                                 tag, exp = "", 0
                                                                 if len(param) >= 6:
-                                                                    exp = myint(param[5])
+                                                                    exp = int_or_zero(param[5])
                                                                 if len(param) >= 7:
                                                                     if param[6][0] == ":":
                                                                         tag = strdata.split(" ", 6)[6]
@@ -2302,7 +2290,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                     else:
                                                                         _entries = MaxUserEntries
 
-                                                                    if len(_list) > myint(_entries):
+                                                                    if len(_list) > int_or_zero(_entries):
                                                                         raw_messages.raw(self, "916", self.nickname,
                                                                                          ret)
                                                                     else:
@@ -2316,7 +2304,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                         else:
                                                                             tag, exp = "", 0
                                                                             if len(param) >= 6:
-                                                                                exp = myint(param[5])
+                                                                                exp = int_or_zero(param[5])
                                                                             if len(param) >= 7:
                                                                                 if param[6][0] == ":":
                                                                                     tag = strdata.split(" ", 6)[6]
@@ -2520,7 +2508,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                     if chanid._prop.client != "":
                                                         raw_messages.raw(self, "818", self.nickname, "%s Client :%s" %
                                                                          (chanid.channelname, chanid._prop.client))
-                                                    if chanid._prop.lag != "" and myint(chanid._prop.lag) != 0:
+                                                    if chanid._prop.lag != "" and int_or_zero(chanid._prop.lag) != 0:
                                                         raw_messages.raw(self, "818", self.nickname, "%s Lag :%s" %
                                                                          (chanid.channelname, chanid._prop.lag))
                                                     if chanid._prop.onjoin != "":
@@ -2569,7 +2557,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                             elif param[2].upper() == "LAG":
                                                 if len(param) == 3:
-                                                    if myint(chanid._prop.lag) != 0:
+                                                    if int_or_zero(chanid._prop.lag) != 0:
                                                         if isSecret(chanid,
                                                                     "private") == False or self.nickname.lower() in server_context.operator_entries or self.nickname.lower() in chanid._users:
                                                             raw_messages.raw(self, "818", self.nickname, "%s Lag :%s" %
@@ -3446,8 +3434,7 @@ def Oper_function(self, param):
                     ":" + server_context.configuration.server_name + " NOTICE SERVER :*** OPER has been disabled\r\n")
             else:
                 _login = False
-                for k in operlines:
-
+                for k in server_context.configuration.operator_lines:
                     if k.username == param[1] and k.password == param[2]:
                         if k.usage:
                             _login = "inuse"
@@ -3762,9 +3749,9 @@ def Mode_function(self, param, strdata=""):
 
                                     elif param[2][iloop] == "l":
                                         if SetMode:
-                                            if myint(param[paramloop]) <= 65535 and myint(param[paramloop]) > 0:
+                                            if int_or_zero(param[paramloop]) <= 65535 and int_or_zero(param[paramloop]) > 0:
                                                 chan.MODE_limit = True
-                                                chan.MODE_limitamount = str(myint(param[paramloop]))
+                                                chan.MODE_limitamount = str(int_or_zero(param[paramloop]))
                                                 szModestr = ":%s!%s@%s MODE %s +l %s\r\n" % (
                                                     self.nickname, self._username, self._hostmask, chan.channelname,
                                                     param[paramloop])

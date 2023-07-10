@@ -14,6 +14,6 @@ class OperatorEntry:
         self.username = username
         self.password = password
         self.flags = flags
-        self.filename = filename
+        self.filename = filename or ""
 
         self.operator_level: int = 0

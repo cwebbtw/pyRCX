@@ -1,6 +1,7 @@
 from typing import List, Dict
 
 from pyRCX.filtering import Filtering
+from pyRCX.operator import OperatorEntry
 
 
 class Configuration:
@@ -16,6 +17,7 @@ class Configuration:
     _DEFAULT_FLOODING_EXEMPT_COMMANDS: List[str] = []
     _DEFAULT_SERVER_ADMIN_NAME = "pyRCX Admin"
     _DEFAULT_SERVER_ADMIN_ORGANISATION = "pyRCX Administration Group"
+    _DEFAULT_OPERATOR_LINES: List[OperatorEntry] = [OperatorEntry("admin", "password", "aoAO", None)]
 
     _DEFAULT_CHANNELS_DATABASE = "database/channels.dat"
     _DEFAULT_ACCESS_DATABASE = "database/access.dat"
@@ -36,6 +38,7 @@ class Configuration:
         self.max_channels: int = Configuration._DEFAULT_MAX_CHANNELS
         self.server_name: str = Configuration._DEFAULT_SERVER_NAME
         self.network_name: str = Configuration._DEFAULT_NETWORK_NAME
+        self.operator_lines: List[OperatorEntry] = Configuration._DEFAULT_OPERATOR_LINES
         self.profanity_entries: List[str] = Configuration._DEFAULT_PROFANITY
         self.disabled_functionality: Dict[str, int] = Configuration._DEFAULT_DISABLED_FUNCTIONALITY
         self.flooding_exempt_commands: List[str] = Configuration._DEFAULT_FLOODING_EXEMPT_COMMANDS
