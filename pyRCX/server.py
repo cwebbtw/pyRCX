@@ -1131,8 +1131,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                 opid, chanid, copid = None, None, None
                                 try:
-                                    chanid = getChannelOBJ(param[1].lower())
-                                    cid = getUserOBJ(param[1].lower())
+                                    chanid = server_context.get_channel(param[1])
+                                    cid = server_context.get_user(param[1])
                                     if cid:
                                         copid = getOperOBJ(cid.nickname.lower())
 
@@ -2602,7 +2602,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._client(self, param[3])
+                                                    chanid.change_client(self, param[3])
 
                                             elif param[2].upper() == "SUBJECT":
                                                 if len(param) == 3:
@@ -2615,7 +2615,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._subject(self, param[3])
+                                                    chanid.change_subject(self, param[3])
 
                                             elif param[2].upper() == "LAG":
                                                 if len(param) == 3:
@@ -2627,7 +2627,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._lag(self, param[3])
+                                                    chanid.change_lag(self, param[3])
 
                                             elif param[2].upper() == "LANGUAGE":
                                                 if len(param) == 3:
@@ -2642,7 +2642,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._language(self, param[3])
+                                                    chanid.change_language(self, param[3])
 
                                             elif param[2].upper() == "ACCOUNT":
                                                 if len(param) == 3:
@@ -2685,7 +2685,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid.change_topic(self, param[3], strdata.split(" ", 3)[3][1:])
+                                                    chanid.change_topic(self, param[3], strdata.split(" ", 3)[3])
 
                                             elif param[2].upper() == "MEMBERKEY":
                                                 if len(param) == 3:
@@ -2696,7 +2696,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._memberkey(self, param[3])
+                                                    chanid.change_memberkey(self, param[3])
 
                                             elif param[2].upper() == "HOSTKEY":
                                                 if len(param) == 3:
@@ -2711,7 +2711,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                             raw_messages.raw(self, "908", self.nickname)
                                                             pass
                                                 else:
-                                                    chanid._hostkey(self, param[3])
+                                                    chanid.change_hostkey(self, param[3])
 
                                             elif param[2].upper() == "OWNERKEY":
                                                 if len(param) == 3:
@@ -2728,7 +2728,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                             raw_messages.raw(self, "908", self.nickname)
                                                             pass
                                                 else:
-                                                    chanid._ownerkey(self, param[3])
+                                                    chanid.change_ownerkey(self, param[3])
 
                                             elif param[2].upper() == "REGISTERED":
                                                 if len(param) == 3:
@@ -2750,7 +2750,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._name(self, param[3])
+                                                    chanid.change_name(self, param[3])
 
                                             elif param[2].upper() == "RESET":
                                                 if len(param) == 3:
@@ -2761,7 +2761,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._reset(self, param[3])
+                                                    chanid.change_reset(self, param[3])
 
                                             elif param[2].upper() == "OID":
                                                 if len(param) == 3:
@@ -2797,7 +2797,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._onmessage(self, param[3], strdata.split(" ", 3)[3], "ONJOIN")
+                                                    chanid.change_event_message(self, param[3], strdata.split(" ", 3)[3], "ONJOIN")
 
                                             elif param[2].upper() == "ONPART":
                                                 if len(param) == 3:
@@ -2810,7 +2810,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                     raw_messages.raw(self, "819", self.nickname, chanid.channelname)
                                                 else:
-                                                    chanid._onmessage(self, param[3], strdata.split(" ", 3)[3], "ONPART")
+                                                    chanid.change_event_message(self, param[3], strdata.split(" ", 3)[3], "ONPART")
 
                                             elif param[2].upper() == "PICS":
                                                 if len(param) == 3:

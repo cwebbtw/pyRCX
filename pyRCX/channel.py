@@ -954,7 +954,7 @@ class Channel:
         else:
             return True
 
-    def _onmessage(self, user, param3, sData, onmsg):
+    def change_event_message(self, user, param3, sData, onmsg):
         if user.nickname.lower() in self._users:
             if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
                 if sData.__len__() > 256:
@@ -981,7 +981,7 @@ class Channel:
         else:
             self._raw_messages.raw(user, "442", user.nickname, self.channelname)
 
-    def _client(self, user, sData):
+    def change_client(self, user, sData):
         if user.nickname.lower() in self._users:
             if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
                 if sData.__len__() > 32:
@@ -1003,22 +1003,15 @@ class Channel:
         else:
             self._raw_messages.raw(user, "442", user.nickname, self.channelname)
 
-    def change_topic(self, user, sData, strd):
-        if strd.__len__() > 512:
+    def change_topic(self, user, content):
+        if content.__len__() > 512:
             self._raw_messages.raw(user, "905", user.nickname, self.channelname)
         else:
-            dotopic = False
-
             if self.MODE_optopic == False or user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
-                dotopic = True
-
-            if dotopic:
                 if self.MODE_ownertopic and user.nickname.lower() not in self._owner:
-                    self._raw_messages.raw(user, "485", self.nickname, self.channelname)
+                    self._raw_messages.raw(user, "485", user.nickname, self.channelname)
                 else:
-                    self._topic = sData
-                    if self._topic[0] == ":":
-                        self._topic = strd
+                    self._topic = content[1:] if content.startswith(":") else content.split(" ")[0]
                     if self._topic == "":
                         self._topic = ""
                     else:
@@ -1033,7 +1026,7 @@ class Channel:
             else:
                 self._raw_messages.raw(user, "482", user.nickname, self.channelname)
 
-    def _subject(self, user, sData):
+    def change_subject(self, user, sData):
         if user.nickname.lower() in self._users:
             if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
                 if sData.__len__() > 32:
@@ -1054,7 +1047,7 @@ class Channel:
         else:
             self._raw_messages.raw(user, "442", user.nickname, self.channelname)
 
-    def _lag(self, user, sData):
+    def change_lag(self, user, sData):
         if user.nickname.lower() in self._users:
             if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
                 if int_or_zero(sData) >= 5 or int_or_zero(sData) < -1 or int_or_zero(sData) == 0 and sData != "0":
@@ -1073,7 +1066,7 @@ class Channel:
         else:
             self._raw_messages.raw(user, "442", user.nickname, self.channelname)
 
-    def _language(self, user, sData):
+    def change_language(self, user, sData):
         if user.nickname.lower() in self._users:
             if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
                 if int_or_zero(sData) >= 65535 or int_or_zero(sData) < -1 or int_or_zero(
@@ -1095,7 +1088,7 @@ class Channel:
         else:
             self._raw_messages.raw(user, "442", user.nickname, self.channelname)
 
-    def _name(self, user, sData):
+    def change_name(self, user, sData):
         if user.nickname.lower() in self._server_context.operator_entries:
             opid = self._server_context.operator_entries[user.nickname.lower()]
             if opid.operator_level > 2:
@@ -1116,7 +1109,7 @@ class Channel:
         else:
             self._raw_messages.raw(user, "908", user.nickname)
 
-    def _hostkey(self, user, sData):
+    def change_hostkey(self, user, sData):
         if user.nickname.lower() in self._users:
             if user.nickname.lower() in self._owner:
                 if not self._validate(sData):
@@ -1139,7 +1132,7 @@ class Channel:
         else:
             self._raw_messages.raw(user, "442", user.nickname, self.channelname)
 
-    def _memberkey(self, user, sData):
+    def change_memberkey(self, user, sData):
         if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
             if len(sData) <= 16:
                 if sData == ":":
@@ -1159,12 +1152,11 @@ class Channel:
                             ":%s!%s@%s MODE %s +k %s\r\n" %
                             (user.nickname, user._username, user._hostmask, self.channelname, sData))
             else:
-                self._raw_messages.raw(self, "905", user.nickname, self.channelname)
+                self._raw_messages.raw(user, "905", user.nickname, self.channelname)
         else:
-            self._raw_messages.raw(self, "482", user.nickname, self.channelname)
+            self._raw_messages.raw(user, "482", user.nickname, self.channelname)
 
-    def _ownerkey(self, user, sData):
-
+    def change_ownerkey(self, user, sData):
         if user.nickname.lower() in self._users:
             if user.nickname.lower() in self._owner:
                 if not self._validate(sData):
@@ -1192,7 +1184,7 @@ class Channel:
         else:
             self._raw_messages.raw(user, "442", user.nickname, self.channelname)
 
-    def _reset(self, user, sData):
+    def change_reset(self, user, sData):
         if user.nickname.lower() in self._server_context.operator_entries or user.nickname.lower() in self._owner:
             b = True
             r = int_or_zero(sData)
