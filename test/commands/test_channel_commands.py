@@ -13,14 +13,26 @@ class ChannelCommandsTest(unittest.TestCase):
         self.server_context: ServerContext = ServerContext()
         self.raw_messages: Raw = MagicMock()
         self.user: User = User(self.server_context.configuration)
-        self.user._nickname = "Christopher"
-        self.server_context.add_user(self.user._nickname, self.user)
+        self.user.nickname = "Christopher"
+        self.server_context.add_user(self.user.nickname, self.user)
+
+    def test_join_should_raise_index_error_for_not_enough_parameters(self):
+        join_command: JoinCommand = JoinCommand(self.server_context, self.raw_messages)
+
+        with self.assertRaises(IndexError):
+            join_command.execute(self.user, ["JOIN"])
+
+    def test_part_should_raise_index_error_for_not_enough_parameters(self):
+        part_command: PartCommand = PartCommand(self.server_context, self.raw_messages)
+
+        with self.assertRaises(IndexError):
+            part_command.execute(self.user, ["PART"])
 
     def test_should_join_channel(self):
         channel_name = "#SoMeWheRe1"
 
         join_command: JoinCommand = JoinCommand(self.server_context, self.raw_messages)
-        join_command.execute(self.user, [channel_name])
+        join_command.execute(self.user, ["JOIN", channel_name])
 
         self.assertNotEqual(self.server_context.get_channel(channel_name), None)
 
@@ -29,7 +41,7 @@ class ChannelCommandsTest(unittest.TestCase):
         channel_name2 = "#SoMeWheRe2"
 
         join_command: JoinCommand = JoinCommand(self.server_context, self.raw_messages)
-        join_command.execute(self.user, [",".join([channel_name1, channel_name2])])
+        join_command.execute(self.user, ["JOIN", ",".join([channel_name1, channel_name2])])
 
         self.assertNotEqual(self.server_context.get_channel(channel_name1), None)
         self.assertNotEqual(self.server_context.get_channel(channel_name2), None)
@@ -38,10 +50,10 @@ class ChannelCommandsTest(unittest.TestCase):
         channel_name = "#SoMeWheRe1"
 
         join_command: JoinCommand = JoinCommand(self.server_context, self.raw_messages)
-        join_command.execute(self.user, [channel_name])
+        join_command.execute(self.user, ["PART", channel_name])
 
         part_command: PartCommand = PartCommand(self.server_context, self.raw_messages)
-        part_command.execute(self.user, [channel_name])
+        part_command.execute(self.user, ["PART", channel_name])
 
         self.assertEqual(self.server_context.get_channel(channel_name), None)
 
@@ -49,13 +61,11 @@ class ChannelCommandsTest(unittest.TestCase):
         channel_name1 = "#SoMeWheRe1"
         channel_name2 = "#SoMeWheRe2"
 
-        parameters = [",".join([channel_name1, channel_name2])]
-
         join_command: JoinCommand = JoinCommand(self.server_context, self.raw_messages)
-        join_command.execute(self.user, parameters)
+        join_command.execute(self.user, ["JOIN", ",".join([channel_name1, channel_name2])])
 
         part_command: PartCommand = PartCommand(self.server_context, self.raw_messages)
-        part_command.execute(self.user, parameters)
+        part_command.execute(self.user, ["PART", ",".join([channel_name1, channel_name2])])
 
         self.assertEqual(self.server_context.get_channel(channel_name1), None)
         self.assertEqual(self.server_context.get_channel(channel_name2), None)

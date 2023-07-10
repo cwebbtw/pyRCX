@@ -16,6 +16,10 @@ class User:
     """
 
     def __init__(self, configuration: Configuration):
+        # Public
+        self.nickname = ""
+
+        # TODO a mixture of public and private variables that need reviewing
         self._configuration = configuration
         self._access = []
         self._nickamount = 0
@@ -35,7 +39,6 @@ class User:
         self._MODE_inviteblock = False
         self._MODE_nowhisper = False
         self._MODE_private = False
-        self._nickname = ""
         self._username = ""
         self._fullname = ""
         self._hostmask = ""

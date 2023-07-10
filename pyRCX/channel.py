@@ -1,13 +1,47 @@
 import re
 import threading
 import time
+
 from copy import copy
 
-from .prop import Prop
+from .helpers import int_or_zero
 from .raw import Raw
 from .server_context import ServerContext
 
 import pyRCX.access as access_helper
+
+
+class ChannelProperties:
+    """
+    Represents the properties of a given channel
+
+    This data must be serializable
+    """
+
+    def __init__(self, name, account):
+        self.name = name
+        self.profanity = []
+        self.ownerkey = ""
+        self.hostkey = ""
+        self.memberkey = ""
+        self.reset = 0
+        self.client = ""
+        self.subject = ""
+        self.creation = str(int(time.time()))
+        if "nickname" in dir(account):
+            self.account = True
+            self.account_name = account.nickname
+            self.account_user = account._username
+            self.account_hostmask = account._hostmask
+            self.account_address = account.details[0]
+        else:
+            self.account = False
+
+        self.registered = ""
+        self.onjoin = ""
+        self.onpart = ""
+        self.lag = 0
+        self.language = ""
 
 
 class _PropResetChannel(threading.Thread):
@@ -110,7 +144,7 @@ class Channel:
                 cclientid = self._nickname_to_client_mapping_entries[joinuser.lower()]
                 cclientid.send(
                     ":%s 706 %s :Channel name is not valid\r\n" % (
-                        self._configuration.server_name, cclientid._nickname))
+                        self._configuration.server_name, cclientid.nickname))
 
             server_context.remove_channel(self.channelname)
 
@@ -129,14 +163,14 @@ class Channel:
 
             if joinuser != "":
                 if self.MODE_noircx == False:
-                    self._owner = [cclientid._nickname.lower()]
+                    self._owner = [cclientid.nickname.lower()]
                 else:
-                    self._op = [cclientid._nickname.lower()]
+                    self._op = [cclientid.nickname.lower()]
 
             if joinuser != "":
-                self._prop = Prop(channelname, cclientid)  # create instance of prop class
+                self._prop = ChannelProperties(channelname, cclientid)  # create instance of prop class
             else:
-                self._prop = Prop(channelname, self._configuration.server_name)
+                self._prop = ChannelProperties(channelname, self._configuration.server_name)
 
             if self.channelname[0] == "&":
                 self.localChannel = True
@@ -150,11 +184,8 @@ class Channel:
                 cclientid._channels.append(self.channelname)
                 cclientid.send(
                     ":%s!%s@%s JOIN :%s\r\n" %
-                    (cclientid._nickname, cclientid._username, cclientid._hostmask, channelname))
-                self.sendnames(cclientid._nickname, True)
-
-    def int_or_zero(self, value):
-        return int(value) if value.isdigit() else 0
+                    (cclientid.nickname, cclientid._username, cclientid._hostmask, channelname))
+                self.sendnames(cclientid.nickname, True)
 
     def has_channel_permissions(self, nickname):  # return true or false depending upon whether nick is oper
         if nickname.lower() in self._op or nickname.lower() in self._owner or self._server_context.get_operator(
@@ -222,15 +253,15 @@ class Channel:
         if "u" in creationmodes:
             self.MODE_knock = True
         if "l" in creationmodes or "k" in creationmodes:
-            data_limit = str(self.int_or_zero(creationmodes_full.split(" ")[1]))
+            data_limit = str(int_or_zero(creationmodes_full.split(" ")[1]))
             data_key = creationmodes_full.split(" ")[1]
             if "l" in creationmodes and "k" in creationmodes:
                 if creationmodes.find("l") > creationmodes.find("k"):
                     data_key = creationmodes_full.split(" ")[1]
-                    data_limit = str(self.int_or_zero(creationmodes_full.split(" ")[2]))
+                    data_limit = str(int_or_zero(creationmodes_full.split(" ")[2]))
                 else:
                     data_key = creationmodes_full.split(" ")[2]
-                    data_limit = str(self.int_or_zero(creationmodes_full.split(" ")[1]))
+                    data_limit = str(int_or_zero(creationmodes_full.split(" ")[1]))
 
             if "l" in creationmodes:
                 self.MODE_limit = True
@@ -335,7 +366,7 @@ class Channel:
     def isBanned(self, cid):
 
         access_helper.CheckChannelExpiry(self)
-        if cid._nickname.lower() in self._operator_entries or self.has_channel_permissions(cid._nickname):
+        if cid.nickname.lower() in self._operator_entries or self.has_channel_permissions(cid.nickname):
             return False
         for each in self.ChannelAccess:
             if each._level.upper() == "DENY":
@@ -368,13 +399,13 @@ class Channel:
         for each in users_in_channel:
             each_channel_user = self._server_context.get_user(each)
             if self.MODE_auditorium == False or self.has_channel_permissions(
-                    each_channel_user._nickname) or self.has_channel_permissions(
-                nick._nickname) or self.has_channel_permissions(
-                knick._nickname) or each_channel_user._nickname.lower() == knick.lower():
+                    each_channel_user.nickname) or self.has_channel_permissions(
+                nick.nickname) or self.has_channel_permissions(
+                knick.nickname) or each_channel_user.nickname.lower() == knick.lower():
                 # This is showing other people that are allowed to see the kick that the user is kicked
                 each_channel_user.send(
                     ":%s!%s@%s KICK %s %s :%s\r\n" %
-                    (nick._nickname, nick._username, nick._hostmask, self.channelname, knick, kickmsg))
+                    (nick.nickname, nick._username, nick._hostmask, self.channelname, knick, kickmsg))
 
         if self.channelname in clientid._channels:
             clientid._channels.remove(self.channelname)
@@ -386,7 +417,7 @@ class Channel:
             while iloop < numstr:
                 clientid.send(
                     ":%s NOTICE %s :%s\r\n" %
-                    (self.channelname, clientid._nickname, self._prop.onpart.split("\\n")[iloop]))
+                    (self.channelname, clientid.nickname, self._prop.onpart.split("\\n")[iloop]))
                 iloop += 1
 
         if len(self._users) == 0:
@@ -394,6 +425,9 @@ class Channel:
 
     def should_send_names(self):
         return self.MODE_secret or self.MODE_servicechan or self.MODE_hidden or self.MODE_private
+
+    def visible_in_list(self):
+        return not self.MODE_secret and not self.MODE_private
 
     def sendnames(self, nick, owner=False, sendwatch=False):
         cclientid = self._server_context.get_user(nick)
@@ -405,7 +439,7 @@ class Channel:
                 if cid:
                     iloop += 1
                     if iloop == 20:
-                        self._raw_messages.raw(cclientid, "353", cclientid._nickname, self.channelname,
+                        self._raw_messages.raw(cclientid, "353", cclientid.nickname, self.channelname,
                                                str_chanlist[1:])
                         str_chanlist = ""
                         iloop = 0
@@ -417,28 +451,28 @@ class Channel:
                             else:
                                 str_chanlist += " @"
 
-                            if cid._nickname.lower() in self._voice:
+                            if cid.nickname.lower() in self._voice:
                                 str_chanlist += "+"
 
-                            str_chanlist += cid._nickname
+                            str_chanlist += cid.nickname
 
-                    elif cid._nickname.lower() in self._owner or cid._nickname.lower() in self._op or cid._nickname.lower() in self._voice:
+                    elif cid.nickname.lower() in self._owner or cid.nickname.lower() in self._op or cid.nickname.lower() in self._voice:
 
                         if nick.lower() not in self._users and cid._MODE_invisible and nick.lower() not in self._operator_entries:
                             pass
                         else:
                             isVoice = False
-                            if cid._nickname.lower() in self._voice:
+                            if cid.nickname.lower() in self._voice:
                                 isVoice = True
 
-                            if cid._nickname.lower() in self._op:
+                            if cid.nickname.lower() in self._op:
                                 str_chanlist += " @"
                                 if isVoice:
                                     str_chanlist += "+"
 
-                                str_chanlist += cid._nickname
+                                str_chanlist += cid.nickname
 
-                            elif cid._nickname.lower() in self._owner:
+                            elif cid.nickname.lower() in self._owner:
                                 if cclientid._IRCX:
                                     if self.MODE_noircx:
                                         str_chanlist += " @"
@@ -450,25 +484,25 @@ class Channel:
                                 if isVoice:
                                     str_chanlist += "+"
 
-                                str_chanlist += cid._nickname
+                                str_chanlist += cid.nickname
 
                             else:
-                                str_chanlist += " +" + cid._nickname
+                                str_chanlist += " +" + cid.nickname
 
                     else:
                         if nick.lower() not in self._users and cid._MODE_invisible and nick.lower() not in self._operator_entries:
                             pass
                         else:
                             if self.MODE_auditorium:
-                                if self.has_channel_permissions(nick) or cid._nickname.lower() == nick.lower():
-                                    str_chanlist = str_chanlist + " " + cid._nickname
+                                if self.has_channel_permissions(nick) or cid.nickname.lower() == nick.lower():
+                                    str_chanlist = str_chanlist + " " + cid.nickname
                             else:
-                                str_chanlist = str_chanlist + " " + cid._nickname
+                                str_chanlist = str_chanlist + " " + cid.nickname
 
             if str_chanlist != "":
-                self._raw_messages.raw(cclientid, "353", cclientid._nickname, self.channelname, str_chanlist[1:])
+                self._raw_messages.raw(cclientid, "353", cclientid.nickname, self.channelname, str_chanlist[1:])
 
-        self._raw_messages.raw(cclientid, "366", cclientid._nickname, self.channelname)
+        self._raw_messages.raw(cclientid, "366", cclientid.nickname, self.channelname)
 
     def __remuser(self, nick, sendmsg):  # remove users from the user record for this channel
         cclientid = self._server_context.get_user(nick)
@@ -480,17 +514,17 @@ class Channel:
                 if nick.lower() in self._watch:
                     cclientid.send(
                         ":%s!%s@%s PART %s\r\n" %
-                        (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname))
+                        (cclientid.nickname, cclientid._username, cclientid._hostmask, self.channelname))
                 else:
                     for each in list(self._users):
                         clientid = self._server_context.get_user(each)
                         if clientid is not None:
                             if self.MODE_auditorium == False or self.has_channel_permissions(
-                                    clientid._nickname) or self.has_channel_permissions(
-                                cclientid._nickname) or cclientid == clientid:
+                                    clientid.nickname) or self.has_channel_permissions(
+                                cclientid.nickname) or cclientid == clientid:
                                 clientid.send(
                                     ":%s!%s@%s PART %s\r\n" %
-                                    (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname))
+                                    (cclientid.nickname, cclientid._username, cclientid._hostmask, self.channelname))
 
             # once a user leaves the channel, they lose their modes, it's now up to access to give them the modes back if enabled
             self.ClearUsersModes(nick.lower())
@@ -535,7 +569,7 @@ class Channel:
                     haskey = True
 
             if self.MODE_limit:
-                if len(self._users) >= self.int_or_zero(
+                if len(self._users) >= int_or_zero(
                         self.MODE_limitamount) and nick.lower() not in self._operator_entries and haskey == False:
                     return -3
 
@@ -603,7 +637,7 @@ class Channel:
         parting_user = self._server_context.get_user(parting_nickname)
         if parting_user:
             if self.__remuser(parting_nickname, True) == False:
-                self._raw_messages.raw(parting_user, "442", parting_user._nickname, self.channelname)
+                self._raw_messages.raw(parting_user, "442", parting_user.nickname, self.channelname)
                 return False
             else:
                 parting_user._channels.remove(self.channelname)
@@ -614,7 +648,7 @@ class Channel:
                     while iloop < numstr:
                         parting_user.send(
                             ":%s NOTICE %s :%s\r\n" %
-                            (self.channelname, parting_user._nickname, self._prop.onpart.split("\\n")[iloop]))
+                            (self.channelname, parting_user.nickname, self._prop.onpart.split("\\n")[iloop]))
                         iloop += 1
 
                 if len(self._users) == 0:
@@ -693,43 +727,43 @@ class Channel:
                 self._watch.append(joinuser.lower())
                 cclientid.send(
                     ":%s!%s@%s JOIN :%s\r\n" %
-                    (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname))
+                    (cclientid.nickname, cclientid._username, cclientid._hostmask, self.channelname))
             else:
                 ChanCopyNames = list(self._users)
                 for each in ChanCopyNames:
                     clientid = self._server_context.get_user(each)
                     if self.MODE_auditorium == False or self.has_channel_permissions(
-                            clientid._nickname) or self.has_channel_permissions(
-                        cclientid._nickname) or clientid == cclientid:
+                            clientid.nickname) or self.has_channel_permissions(
+                        cclientid.nickname) or clientid == cclientid:
                         if isoper or key == self._prop.ownerkey and key != "" or joinuser.lower() in self._owner:
                             keyjoin = 2
                             if clientid._IRCX and self.MODE_noircx == False:
                                 clientid.send(
                                     ":%s!%s@%s JOIN :%s\r\n:%s MODE %s +q %s\r\n" %
-                                    (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname,
-                                     self._configuration.server_name, self.channelname, cclientid._nickname))
+                                    (cclientid.nickname, cclientid._username, cclientid._hostmask, self.channelname,
+                                     self._configuration.server_name, self.channelname, cclientid.nickname))
                             else:
                                 clientid.send(
                                     ":%s!%s@%s JOIN :%s\r\n:%s MODE %s +o %s\r\n" %
-                                    (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname,
-                                     self._configuration.server_name, self.channelname, cclientid._nickname))
+                                    (cclientid.nickname, cclientid._username, cclientid._hostmask, self.channelname,
+                                     self._configuration.server_name, self.channelname, cclientid.nickname))
 
                         elif key == self._prop.hostkey and key != "" or joinuser.lower() in self._op:
                             clientid.send(
                                 ":%s!%s@%s JOIN :%s\r\n:%s MODE %s +o %s\r\n" %
-                                (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname,
-                                 self._configuration.server_name, self.channelname, cclientid._nickname))
+                                (cclientid.nickname, cclientid._username, cclientid._hostmask, self.channelname,
+                                 self._configuration.server_name, self.channelname, cclientid.nickname))
                             keyjoin = 1
 
                         elif joinuser.lower() in self._voice and joinuser.lower() not in self._op and joinuser.lower() not in self._owner:
                             clientid.send(
                                 ":%s!%s@%s JOIN :%s\r\n:%s MODE %s +v %s\r\n" %
-                                (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname,
-                                 self._configuration.server_name, self.channelname, cclientid._nickname))
+                                (cclientid.nickname, cclientid._username, cclientid._hostmask, self.channelname,
+                                 self._configuration.server_name, self.channelname, cclientid.nickname))
                         else:
                             clientid.send(
                                 ":%s!%s@%s JOIN :%s\r\n" %
-                                (cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname))
+                                (cclientid.nickname, cclientid._username, cclientid._hostmask, self.channelname))
 
                 del ChanCopyNames
 
@@ -749,11 +783,11 @@ class Channel:
                     self._voice.append(joinuser.lower())
 
             if self._topic != "":
-                self._raw_messages.raw(cclientid, "332", cclientid._nickname, self.channelname, self._topic)
-                self._raw_messages.raw(cclientid, "333", cclientid._nickname, self.channelname, self._topic_nick,
+                self._raw_messages.raw(cclientid, "332", cclientid.nickname, self.channelname, self._topic)
+                self._raw_messages.raw(cclientid, "333", cclientid.nickname, self.channelname, self._topic_nick,
                                        self._topic_time)
 
-            self.sendnames(cclientid._nickname, False, True)
+            self.sendnames(cclientid.nickname, False, True)
 
             if self._prop.onjoin != "":
                 iloop = 0
@@ -766,10 +800,10 @@ class Channel:
         else:
             k_numeric = ""
             if _r == -1:
-                self._raw_messages.raw(cclientid, "927", cclientid._nickname, self.channelname)
+                self._raw_messages.raw(cclientid, "927", cclientid.nickname, self.channelname)
 
             elif _r == -2:
-                self._raw_messages.raw(cclientid, "473", cclientid._nickname, self.channelname)
+                self._raw_messages.raw(cclientid, "473", cclientid.nickname, self.channelname)
                 if self.MODE_knock:
                     k_numeric = "473"
 
@@ -784,7 +818,7 @@ class Channel:
                             for each in chanid._users:
                                 cid = self._server_context.get_user(each)
                                 if cid is not None:
-                                    self._raw_messages.raw(cid, "934", cid._nickname)  # LINK NOTE: sendRawDataHere
+                                    self._raw_messages.raw(cid, "934", cid.nickname)  # LINK NOTE: sendRawDataHere
 
                             chanid.resetchannel()
                         else:
@@ -801,34 +835,34 @@ class Channel:
                     newchan.join(joinuser)
 
                 else:
-                    self._raw_messages.raw(cclientid, "471", cclientid._nickname, self.channelname)
+                    self._raw_messages.raw(cclientid, "471", cclientid.nickname, self.channelname)
                     if self.MODE_knock:
                         k_numeric = "471"
 
             elif _r == -4:
-                self._raw_messages.raw(cclientid, "483", cclientid._nickname, self.channelname,
+                self._raw_messages.raw(cclientid, "483", cclientid.nickname, self.channelname,
                                        "You are not an Administrator")
                 if self.MODE_knock:
                     k_numeric = "483"
 
             elif _r == -5:
-                self._raw_messages.raw(cclientid, "913", cclientid._nickname, self.channelname)
+                self._raw_messages.raw(cclientid, "913", cclientid.nickname, self.channelname)
                 if self.MODE_knock:
                     k_numeric = "913"
 
             elif _r == -6:
-                self._raw_messages.raw(cclientid, "477", cclientid._nickname, self.channelname)
+                self._raw_messages.raw(cclientid, "477", cclientid.nickname, self.channelname)
                 if self.MODE_knock:
                     k_numeric = "477"
 
             elif _r == -7:
-                self._raw_messages.raw(cclientid, "483", cclientid._nickname, self.channelname,
+                self._raw_messages.raw(cclientid, "483", cclientid.nickname, self.channelname,
                                        "User with same address already in channel")
                 if self.MODE_knock:
                     k_numeric = "483"
 
             elif _r == 0:
-                self._raw_messages.raw(cclientid, "520", cclientid._nickname, self.channelname)
+                self._raw_messages.raw(cclientid, "520", cclientid.nickname, self.channelname)
                 if self.MODE_knock:
                     k_numeric = "520"
 
@@ -839,7 +873,7 @@ class Channel:
                         each_user.send(
                             ":%s!%s@%s KNOCK %s %s\r\n" %
                             (
-                                cclientid._nickname, cclientid._username, cclientid._hostmask, self.channelname,
+                                cclientid.nickname, cclientid._username, cclientid._hostmask, self.channelname,
                                 k_numeric))
 
     def communicate(self, msguser, nop, msg):
@@ -848,7 +882,7 @@ class Channel:
             sendto = True
 
             if self.channelname in cclientid._watch:
-                self._raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname,
+                self._raw_messages.raw(cclientid, "404", cclientid.nickname, self.channelname,
                                        "Cannot send to channel")
                 cclientid.send(":" + self._configuration.server_name +
                                " NOTICE SERVER :*** You are watching this channel, you can't participate\r\n")
@@ -859,18 +893,18 @@ class Channel:
                     pass
                 else:
                     sendto = False
-                    self._raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname,
+                    self._raw_messages.raw(cclientid, "404", cclientid.nickname, self.channelname,
                                            "Cannot send to channel")
 
             elif self.MODE_nocolour:
                 if chr(3) in msg or chr(2) in msg or "\x1F" in msg:
-                    self._raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname,
+                    self._raw_messages.raw(cclientid, "404", cclientid.nickname, self.channelname,
                                            "Cannot send to channel")
                     sendto = False
 
             if self.MODE_gagonban:
                 if self.isBanned(cclientid):
-                    self._raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname,
+                    self._raw_messages.raw(cclientid, "404", cclientid.nickname, self.channelname,
                                            "Cannot send to channel whilst banned")
                     sendto = False
 
@@ -884,7 +918,7 @@ class Channel:
 
                 if foundprofanity:
                     sendto = False
-                    self._raw_messages.raw(cclientid, "404", cclientid._nickname, self.channelname,
+                    self._raw_messages.raw(cclientid, "404", cclientid.nickname, self.channelname,
                                            "Cannot send to channel (filter in use)")
                     cclientid.send(":" + self._configuration.server_name +
                                    " NOTICE SERVER :*** A filter is in use, your last message was blocked\r\n")
@@ -894,21 +928,279 @@ class Channel:
                     clientid = self._nickname_to_client_mapping_entries[each.lower()]
                     if clientid != cclientid:
                         if self.MODE_auditorium == False or self.has_channel_permissions(
-                                clientid._nickname) or self.has_channel_permissions(
-                            cclientid._nickname):
+                                clientid.nickname) or self.has_channel_permissions(
+                            cclientid.nickname):
                             if self.MODE_stripcolour:
                                 msg = re.sub("\x03[0-9]{1,2}(\,[0-9]{1,2}|)|\x1F|\x02", "", msg)
 
                             clientid.send(
                                 ":%s!%s@%s %s %s :%s\r\n" %
-                                (cclientid._nickname, cclientid._username, cclientid._hostmask, nop.upper(),
+                                (cclientid.nickname, cclientid._username, cclientid._hostmask, nop.upper(),
                                  self.channelname, msg))
 
             if "PRIVMSG" not in self._configuration.flooding_exempt_commands:
-                if cclientid._nickname.lower() not in self._op and cclientid._nickname.lower() not in self._owner and cclientid._nickname.lower() not in self._operator_entries:
+                if cclientid.nickname.lower() not in self._op and cclientid.nickname.lower() not in self._owner and cclientid.nickname.lower() not in self._operator_entries:
                     time.sleep(0.8)
                 else:
                     time.sleep(0.18)
 
         else:
-            self._raw_messages.raw(cclientid, "442", cclientid._nickname, self.channelname)
+            self._raw_messages.raw(cclientid, "442", cclientid.nickname, self.channelname)
+
+    def _validate(self, property):
+        p = re.compile("^[\x21-\xFF]{1,32}$")
+        if p.match(property) is None:
+            return False
+        else:
+            return True
+
+    def change_event_message(self, user, param3, sData, onmsg):
+        if user.nickname.lower() in self._users:
+            if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
+                if sData.__len__() > 256:
+                    self._raw_messages.raw(user, "905", user.nickname, self.channelname)
+                else:
+                    stroj = sData
+                    if stroj[0] != ":":
+                        stroj = param3
+                    else:
+                        stroj = stroj[1:]
+
+                    if onmsg.upper() == "ONJOIN":
+                        self._prop.onjoin = stroj
+                    elif onmsg.upper() == "ONPART":
+                        self._prop.onpart = stroj
+
+                    for each in self._users:
+                        cid = self._server_context.nickname_to_client_mapping_entries[each]
+                        cid.send(
+                            ":%s!%s@%s PROP %s %s :%s\r\n" %
+                            (user.nickname, user._username, user._hostmask, self.channelname, onmsg, stroj))
+            else:
+                self._raw_messages.raw(user, "482", user.nickname, self.channelname)
+        else:
+            self._raw_messages.raw(user, "442", user.nickname, self.channelname)
+
+    def change_client(self, user, sData):
+        if user.nickname.lower() in self._users:
+            if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
+                if sData.__len__() > 32:
+                    self._raw_messages.raw(user, "905", user.nickname, self.channelname)
+                else:
+                    if sData == ":":
+                        sData = ""
+                    if sData != "" and sData[0] == ":":
+                        sData = sData[1:]
+
+                    self._prop.client = sData
+                    for each in self._users:
+                        cid = self._server_context.nickname_to_client_mapping_entries[each]
+                        cid.send(
+                            ":%s!%s@%s PROP %s CLIENT :%s\r\n" %
+                            (user.nickname, user._username, user._hostmask, self.channelname, sData))
+            else:
+                self._raw_messages.raw(user, "482", user.nickname, self.channelname)
+        else:
+            self._raw_messages.raw(user, "442", user.nickname, self.channelname)
+
+    def change_topic(self, user, content):
+        if content.__len__() > 512:
+            self._raw_messages.raw(user, "905", user.nickname, self.channelname)
+        else:
+            if self.MODE_optopic == False or user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
+                if self.MODE_ownertopic and user.nickname.lower() not in self._owner:
+                    self._raw_messages.raw(user, "485", user.nickname, self.channelname)
+                else:
+                    self._topic = content[1:] if content.startswith(":") else content.split(" ")[0]
+                    if self._topic == "":
+                        self._topic = ""
+                    else:
+                        self._topic_nick = user.nickname
+                        self._topic_time = int(time.time())
+
+                    for each in self._users:
+                        cid = self._server_context.nickname_to_client_mapping_entries[each]
+                        cid.send(
+                            ":%s!%s@%s TOPIC %s :%s\r\n" %
+                            (user.nickname, user._username, user._hostmask, self.channelname, self._topic))
+            else:
+                self._raw_messages.raw(user, "482", user.nickname, self.channelname)
+
+    def change_subject(self, user, sData):
+        if user.nickname.lower() in self._users:
+            if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
+                if sData.__len__() > 32:
+                    self._raw_messages.raw(user, "905", user.nickname, self.channelname)
+                else:
+                    if sData == ":":
+                        sData = ""
+                    if sData != "" and sData[0] == ":":
+                        sData = sData[1:]
+                    self._prop.subject = sData
+                    for each in self._users:
+                        cid = self._server_context.nickname_to_client_mapping_entries[each]
+                        cid.send(
+                            ":%s!%s@%s PROP %s SUBJECT :%s\r\n" %
+                            (user.nickname, user._username, user._hostmask, self.channelname, sData))
+            else:
+                self._raw_messages.raw(user, "482", user.nickname, self.channelname)
+        else:
+            self._raw_messages.raw(user, "442", user.nickname, self.channelname)
+
+    def change_lag(self, user, sData):
+        if user.nickname.lower() in self._users:
+            if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
+                if int_or_zero(sData) >= 5 or int_or_zero(sData) < -1 or int_or_zero(sData) == 0 and sData != "0":
+                    self._raw_messages.raw(user, "905", user.nickname, self.channelname)
+                else:
+                    if int_or_zero(sData) == 0:
+                        sData = 0
+                    self._prop.lag = int_or_zero(sData)
+                    for each in self._users:
+                        cid = self._server_context.nickname_to_client_mapping_entries[each]
+                        cid.send(":%s!%s@%s PROP %s LAG :%s\r\n" % (user.nickname, user._username,
+                                                                    user._hostmask, self.channelname,
+                                                                    str(int_or_zero(sData))))
+            else:
+                self._raw_messages.raw(user, "482", user.nickname, self.channelname)
+        else:
+            self._raw_messages.raw(user, "442", user.nickname, self.channelname)
+
+    def change_language(self, user, sData):
+        if user.nickname.lower() in self._users:
+            if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
+                if int_or_zero(sData) >= 65535 or int_or_zero(sData) < -1 or int_or_zero(
+                        sData) == 0 and sData != "0" and sData != ":":
+                    self._raw_messages.raw(user, "905", user.nickname, self.channelname)
+                else:
+                    if sData == ":":
+                        self._prop.language = ""
+                    else:
+                        self._prop.language = int_or_zero(sData)
+
+                    for each in self._users:
+                        cid = self._server_context.nickname_to_client_mapping_entries[each]
+                        cid.send(":%s!%s@%s PROP %s LANGUAGE :%s\r\n" % (user.nickname, user._username,
+                                                                         user._hostmask, self.channelname,
+                                                                         str(self._prop.language)))
+            else:
+                self._raw_messages.raw(user, "482", user.nickname, self.channelname)
+        else:
+            self._raw_messages.raw(user, "442", user.nickname, self.channelname)
+
+    def change_name(self, user, sData):
+        if user.nickname.lower() in self._server_context.operator_entries:
+            opid = self._server_context.operator_entries[user.nickname.lower()]
+            if opid.operator_level > 2:
+                if sData.lower() == self.channelname.lower():
+                    for each in self._users:
+                        cid = self._server_context.nickname_to_client_mapping_entries[each]
+                        cid._channels.remove(self.channelname)
+                        cid._channels.append(sData)
+                        cid.send(
+                            ":%s!%s@%s PROP %s NAME :%s\r\n" %
+                            (user.nickname, user._username, user._hostmask, self.channelname, sData))
+
+                    self.channelname = sData
+                else:
+                    self._raw_messages.raw(user, "908", user.nickname)
+            else:
+                self._raw_messages.raw(user, "908", user.nickname)
+        else:
+            self._raw_messages.raw(user, "908", user.nickname)
+
+    def change_hostkey(self, user, sData):
+        if user.nickname.lower() in self._users:
+            if user.nickname.lower() in self._owner:
+                if not self._validate(sData):
+                    self._raw_messages.raw(user, "905", user.nickname, self.channelname)
+                else:
+                    if sData == ":":
+                        sData = ""
+                    if sData != "" and sData[0] == ":":
+                        sData = sData[1:]
+
+                    self._prop.hostkey = sData
+                    for each in self._users:
+                        cid = self._server_context.nickname_to_client_mapping_entries[each]
+                        if each.lower() in self._owner:
+                            cid.send(
+                                ":%s!%s@%s PROP %s HOSTKEY :%s\r\n" %
+                                (user.nickname, user._username, user._hostmask, self.channelname, sData))
+            else:
+                self._raw_messages.raw(user, "485", user.nickname, self.channelname)
+        else:
+            self._raw_messages.raw(user, "442", user.nickname, self.channelname)
+
+    def change_memberkey(self, user, sData):
+        if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
+            if len(sData) <= 16:
+                if sData == ":":
+                    sData = ""
+                if sData != "" and sData[0] == ":":
+                    sData = sData[1:]
+
+                self.MODE_key = str(sData)
+                for each in self._users:
+                    cclientid = self._server_context.nickname_to_client_mapping_entries[each]
+                    if sData == "":
+                        cclientid.send(
+                            ":%s!%s@%s MODE %s -k\r\n" %
+                            (user.nickname, user._username, user._hostmask, self.channelname))
+                    else:
+                        cclientid.send(
+                            ":%s!%s@%s MODE %s +k %s\r\n" %
+                            (user.nickname, user._username, user._hostmask, self.channelname, sData))
+            else:
+                self._raw_messages.raw(user, "905", user.nickname, self.channelname)
+        else:
+            self._raw_messages.raw(user, "482", user.nickname, self.channelname)
+
+    def change_ownerkey(self, user, sData):
+        if user.nickname.lower() in self._users:
+            if user.nickname.lower() in self._owner:
+                if not self._validate(sData):
+                    self._raw_messages.raw(user, "905", user.nickname, self.channelname)
+                else:
+                    if sData == ":":
+                        sData = ""
+                    if sData != "" and sData[0] == ":":
+                        sData = sData[1:]
+
+                    self._prop.ownerkey = sData
+
+                    time.sleep(0.2)
+
+                    for each in self._users:
+                        cid = self._server_context.nickname_to_client_mapping_entries[each]
+                        if each.lower() in self._owner:
+                            cid.send(":%s!%s@%s PROP %s OWNERKEY :%s\r\n" %
+                                     (user.nickname, user._username, user._hostmask, self.channelname, sData))
+
+                    time.sleep(0.2)  # let people have fun!
+
+            else:
+                self._raw_messages.raw(user, "485", user.nickname, self.channelname)
+        else:
+            self._raw_messages.raw(user, "442", user.nickname, self.channelname)
+
+    def change_reset(self, user, sData):
+        if user.nickname.lower() in self._server_context.operator_entries or user.nickname.lower() in self._owner:
+            b = True
+            r = int_or_zero(sData)
+            if r == 0 and sData == "0":
+                self._prop.reset = 0
+            elif 120 >= r > -1:
+                self._prop.reset = r
+            else:
+                self._raw_messages.raw(user, "906", user.nickname, sData)
+                b = False
+
+            if b:
+                for each in self._users:
+                    cid = self._server_context.nickname_to_client_mapping_entries[each]
+                    cid.send(":%s!%s@%s PROP %s RESET :%d\r\n" % (user.nickname, user._username,
+                                                                  user._hostmask, self.channelname,
+                                                                  self._prop.reset))
+        else:
+            self._raw_messages.raw(user, "485", user.nickname, self.channelname)

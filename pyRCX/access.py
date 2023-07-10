@@ -63,8 +63,8 @@ def MatchAccess(server_context, _mask, cid, NoMatchIP=False):
             if cid._MODE_register:
                 for groupnicks in list(server_context.nickserv_entries.values()):
                     if _mask[1:].lower() in groupnicks.grouped_nicknames or _mask[
-                                                                            1:].lower() == groupnicks._nickname.lower():
-                        if cid._nickname.lower() in groupnicks.grouped_nicknames or cid._nickname.lower() == groupnicks._nickname.lower():
+                                                                            1:].lower() == groupnicks.nickname.lower():
+                        if cid.nickname.lower() in groupnicks.grouped_nicknames or cid.nickname.lower() == groupnicks.nickname.lower():
                             return 1
 
     p = re.compile("^(.+)\!(.+)\@(.+)\$(.+)$")
@@ -89,12 +89,12 @@ def MatchAccess(server_context, _mask, cid, NoMatchIP=False):
         s = re.compile(_server_re)
 
         if s.match(cid._server):
-            if x.match(cid._nickname.lower() + "!" + cid._username.lower() + "@" + cid._hostmask.lower()) != None:
+            if x.match(cid.nickname.lower() + "!" + cid._username.lower() + "@" + cid._hostmask.lower()) != None:
                 return 1
             if x.match(
-                    cid._nickname.lower() + "!" + cid._username.lower() + "@" + cid._hostname.lower()) != None and NoMatchIP == False:
+                    cid.nickname.lower() + "!" + cid._username.lower() + "@" + cid._hostname.lower()) != None and NoMatchIP == False:
                 return 1
-            if x.match(cid._nickname.lower() + "!" + cid._username.lower() + "@" + cid.details[
+            if x.match(cid.nickname.lower() + "!" + cid._username.lower() + "@" + cid.details[
                 0]) != None and NoMatchIP == False:
                 return 1
         else:
@@ -211,7 +211,7 @@ def CreateMaskString(server_context, strin, server=False):
 def ClearRecords(server_context, raw_messages, object, cid, level=""):
     _securitymsg = False
     if object == "*":
-        opid = server_context.operator_entries[cid._nickname.lower()]
+        opid = server_context.operator_entries[cid.nickname.lower()]
         for each in list(server_context.server_access_entries):
 
             if level == "" or level.upper() == each._level.upper():
@@ -221,25 +221,25 @@ def ClearRecords(server_context, raw_messages, object, cid, level=""):
                     server_context.server_access_entries.remove(each)
 
         if _securitymsg:
-            raw_messages.raw(cid, "922", cid._nickname, "*")
+            raw_messages.raw(cid, "922", cid.nickname, "*")
         else:
             if level == "":
                 level = "*"
-            raw_messages.raw(cid, "820", cid._nickname, "*", level)
+            raw_messages.raw(cid, "820", cid.nickname, "*", level)
 
     elif object[0] == "#" or object[0] == "%" or object[0] == "&":
         chanid = server_context.channel_entries[object.lower()]
         _operlevel = 0
-        if cid._nickname.lower() in chanid._op:
+        if cid.nickname.lower() in chanid._op:
             _operlevel = 1
-        if cid._nickname.lower() in chanid._owner:
+        if cid.nickname.lower() in chanid._owner:
             _operlevel = 2
-        if cid._nickname.lower() in server_context.operator_entries:
-            opid = server_context.operator_entries[cid._nickname.lower()]
+        if cid.nickname.lower() in server_context.operator_entries:
+            opid = server_context.operator_entries[cid.nickname.lower()]
             _operlevel = opid.operator_level + 2
 
         if _operlevel < 1:
-            raw_messages.raw(cid, "913", cid._nickname, chanid.channelname)
+            raw_messages.raw(cid, "913", cid.nickname, chanid.channelname)
             return -1
 
         for each in list(chanid.ChannelAccess):
@@ -250,11 +250,11 @@ def ClearRecords(server_context, raw_messages, object, cid, level=""):
                     chanid.ChannelAccess.remove(each)
 
         if _securitymsg:
-            raw_messages.raw(cid, "922", cid._nickname, chanid.channelname)
+            raw_messages.raw(cid, "922", cid.nickname, chanid.channelname)
         else:
             if level == "":
                 level = "*"
-            raw_messages.raw(cid, "820", cid._nickname, chanid.channelname, level)
+            raw_messages.raw(cid, "820", cid.nickname, chanid.channelname, level)
 
     else:
         for each in list(cid._access):
@@ -263,12 +263,12 @@ def ClearRecords(server_context, raw_messages, object, cid, level=""):
 
         if level == "":
             level = "*"
-        raw_messages.raw(cid, "820", cid._nickname, cid._nickname, level)
+        raw_messages.raw(cid, "820", cid.nickname, cid.nickname, level)
 
 
 def DelRecord(server_context, cid, object, level, mask):
     if object[0] == "*":
-        opid = server_context.operator_entries[cid._nickname.lower()]
+        opid = server_context.operator_entries[cid.nickname.lower()]
         for each in list(server_context.server_access_entries):
             if each._mask.lower() == mask.lower() and each._level.lower() == level.lower():
                 if (opid.operator_level + 2) < each._oplevel:
@@ -280,17 +280,17 @@ def DelRecord(server_context, cid, object, level, mask):
     elif object[0] == "#" or object[0] == "%" or object[0] == "&":
         chanid = server_context.channel_entries[object.lower()]
         _operlevel = 0
-        if cid._nickname.lower() in chanid._op:
+        if cid.nickname.lower() in chanid._op:
             _operlevel = 1
-        if cid._nickname.lower() in chanid._owner:
+        if cid.nickname.lower() in chanid._owner:
             _operlevel = 2
-        if cid._nickname.lower() in server_context.operator_entries:
-            opid = server_context.operator_entries[cid._nickname.lower()]
+        if cid.nickname.lower() in server_context.operator_entries:
+            opid = server_context.operator_entries[cid.nickname.lower()]
             _operlevel = opid.operator_level + 2
 
-        if cid._nickname.lower() not in chanid._op and cid._nickname.lower() not in chanid._owner and cid._nickname.lower() not in server_context.operator_entries:
+        if cid.nickname.lower() not in chanid._op and cid.nickname.lower() not in chanid._owner and cid.nickname.lower() not in server_context.operator_entries:
             return -2  # not op - return no access
-        if level.upper() == "OWNER" and cid._nickname.lower() not in chanid._owner and cid._nickname.lower() not in server_context.operator_entries:
+        if level.upper() == "OWNER" and cid.nickname.lower() not in chanid._owner and cid.nickname.lower() not in server_context.operator_entries:
             return -2  # not owner - return no access
 
         CopyChannelAccess = list(chanid.ChannelAccess)
@@ -320,7 +320,7 @@ def AddRecord(server_context, cid, object, level, mask, expires, tag):
         if cid == "":
             _operlevel = 6
         else:
-            opid = server_context.operator_entries[cid._nickname.lower()]
+            opid = server_context.operator_entries[cid.nickname.lower()]
             _operlevel = opid.operator_level + 2
 
         _list = server_context.server_access_entries
@@ -331,17 +331,17 @@ def AddRecord(server_context, cid, object, level, mask, expires, tag):
         if cid == "":
             _operlevel = 5
         else:
-            if cid._nickname.lower() in objid._op:
+            if cid.nickname.lower() in objid._op:
                 _operlevel = 1
-            if cid._nickname.lower() in objid._owner:
+            if cid.nickname.lower() in objid._owner:
                 _operlevel = 2
-            if cid._nickname.lower() in server_context.operator_entries:
-                opid = server_context.operator_entries[cid._nickname.lower()]
+            if cid.nickname.lower() in server_context.operator_entries:
+                opid = server_context.operator_entries[cid.nickname.lower()]
                 _operlevel = opid.operator_level + 2
 
-            if cid._nickname.lower() not in objid._op and cid._nickname.lower() not in objid._owner and cid._nickname.lower() not in server_context.operator_entries:
+            if cid.nickname.lower() not in objid._op and cid.nickname.lower() not in objid._owner and cid.nickname.lower() not in server_context.operator_entries:
                 return -2  # not op - return no access
-            if level.upper() == "OWNER" and cid._nickname.lower() not in objid._owner and cid._nickname.lower() not in server_context.operator_entries:
+            if level.upper() == "OWNER" and cid.nickname.lower() not in objid._owner and cid.nickname.lower() not in server_context.operator_entries:
                 return -2  # not owner - return no access
 
         _list = objid.ChannelAccess

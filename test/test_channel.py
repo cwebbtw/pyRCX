@@ -1,12 +1,12 @@
 import logging
 import unittest
 import sys
-from unittest import TestCase
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock, call
 
 from pyRCX import server
-from pyRCX.prop import Prop
+from pyRCX.channel import ChannelProperties, Channel
 from pyRCX.server_context import ServerContext
+from pyRCX.user import User
 
 
 class ChannelTest(unittest.TestCase):
@@ -16,42 +16,61 @@ class ChannelTest(unittest.TestCase):
     """
 
     def setUp(self):
+        self.channel = "self.channel"
+
+        # Given
+        self.server_context: ServerContext = ServerContext()
+        self.server_context.configuration.channels_database_file = "/tmp/channels.dat"
+        server.server_context = self.server_context
+
+        self.user: User = User(self.server_context.configuration)
+        self.user.nickname = "Christopher"
+        self.server_context.add_user(self.user.nickname, self.user)
+
         logging.basicConfig(stream=sys.stdout, level=logging.ERROR)
 
         server.statistics = MagicMock()
 
     def test_write_users_should_save_channel(self):
-        # Given
-        server_context: ServerContext = ServerContext()
 
-        server_context.configuration.channels_database_file = "/tmp/channels.dat"
-
-        server.server_context = server_context
-
-        channel_information = server.Channel(server_context, MagicMock(), "#somewhere", "", "")
+        channel_information = Channel(self.server_context, MagicMock(), "self.channel", "", "")
         channel_information.MODE_registered = True
         channel_information.MODE_private = True
 
-        channel_information._prop = Prop("chris", None)
+        channel_information._prop = ChannelProperties("chris", None)
         channel_information._prop.onjoin = "welcome"
 
-        server_context.channel_entries = {"#somewhere": channel_information}
+        self.server_context.channel_entries = {"self.channel": channel_information}
 
         # When
         server.WriteUsers(False, True, False)
 
-        server_context.channel_entries = {}
+        self.server_context.channel_entries = {}
 
         # Then
         server.load_channel_history()
 
-        expected_channel: server.Channel = server_context.channel_entries["#somewhere"]
+        expected_channel: server.Channel = self.server_context.channel_entries["self.channel"]
 
         self.assertTrue(expected_channel.MODE_registered)
         self.assertTrue(expected_channel.MODE_private)
-        self.assertEqual(expected_channel.channelname, "#somewhere")
+        self.assertEqual(expected_channel.channelname, "self.channel")
         self.assertEqual(expected_channel._prop.onjoin, "welcome")
 
+    def test_can_change_ownerkey_property(self):
+        channel_information = Channel(self.server_context, MagicMock(), "self.channel", "", "")
+        channel_information.MODE_optopic = False
+        channel_information.join(self.user.nickname)
 
-class TestPartCommand(TestCase):
-    pass
+        mock = Mock()
+        self.user.send = mock
+
+        channel_information.change_topic(self.user, ":This is my new topic")
+        mock.assert_called_once_with(f":{self.user.nickname}!{self.user._username}@{self.user._hostmask} TOPIC {self.channel} :This is my new topic\r\n")
+
+        mock.reset_mock()
+
+        channel_information.change_topic(self.user, "This is my new topic")
+        mock.assert_called_once_with(
+            f":{self.user.nickname}!{self.user._username}@{self.user._hostmask} TOPIC {self.channel} :This\r\n")
+
