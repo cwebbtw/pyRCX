@@ -15,7 +15,7 @@ from zlib import compress, decompress
 
 import pyRCX.access as access_helper
 from .channel import Channel
-from .commands.channel import JoinCommand, PartCommand
+from .commands.channel import JoinCommand, PartCommand, CreateCommand
 from .commands.list import ListCommand
 from .commands.topic import TopicCommand
 from .filtering import FilterEntry, Filtering
@@ -39,6 +39,7 @@ access_helper.initialise(server_context, raw_messages)
 # Commands
 join_command: JoinCommand = JoinCommand(server_context, raw_messages)
 part_command: PartCommand = PartCommand(server_context, raw_messages)
+create_command: CreateCommand = CreateCommand(server_context, raw_messages)
 list_command: ListCommand = ListCommand(server_context, raw_messages)
 topic_command: TopicCommand = TopicCommand(server_context, raw_messages)
 # Here are some settings, these can be coded into the conf later I suppose
@@ -1672,9 +1673,6 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                 elif param[0] == "MODE":
                                     Mode_function(self, param, strdata)
 
-                                elif param[0] == "TOPIC":
-                                    topic_command.execute(self, param)
-
                                 elif param[0] == "OPER":
                                     Oper_function(self, param)
 
@@ -2924,53 +2922,16 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                         raw_messages.raw(self, "403", self.nickname, param[1])
 
                                 elif param[0] == "CREATE":
-                                    _sleep = "%.4f" % (random() / 9)
-
-                                    if param[1].lower() in server_context.channel_entries:
-                                        raw_messages.raw(self, "705", self.nickname, param[1])
-                                    else:
-                                        if len(self._channels) >= server_context.configuration.max_channels_per_user:
-                                            raw_messages.raw(self, "405", self.nickname, param[1])
-                                        else:
-                                            if len(server_context.channel_entries) >= server_context.configuration.max_channels:
-                                                raw_messages.raw(self, "710", self.nickname,
-                                                                 server_context.configuration.max_channels)
-                                            else:
-                                                if len(param) == 2:
-                                                    creationmodes = "0"
-                                                else:
-                                                    creationmodes = strdata.split(" ", 2)[2]
-
-                                                if self.nickname.lower() in server_context.operator_entries:
-                                                    creationmodes = creationmodes.replace("r", "").replace("e", "")
-                                                else:
-                                                    creationmodes = creationmodes.replace(
-                                                        "r", "").replace(
-                                                        "N", "").replace(
-                                                        "A", "").replace(
-                                                        "a", "").replace(
-                                                        "d", "").replace(
-                                                        "e", "")
-
-                                                if param[1].lower() not in createmute:
-                                                    createmute[param[1].lower()] = self
-                                                    created_channel = Channel(
-                                                        server_context,
-                                                        raw_messages,
-                                                        param[1],
-                                                        self.nickname, creationmodes)  # create
-                                                    if created_channel.channelname != "":
-                                                        server_context.add_channel(param[1], created_channel)
-
-                                                    del createmute[param[1].lower()]
-                                                else:
-                                                    raw_messages.raw(self, "705", self.nickname, param[1])
+                                    create_command.execute(self, param)
 
                                 elif param[0] == "JOIN":
                                     join_command.execute(self, param)
 
                                 elif param[0] == "PART":
                                     part_command.execute(self, param)
+
+                                elif param[0] == "TOPIC":
+                                    topic_command.execute(self, param)
 
                                 elif param[0] == "FINDS":
                                     if chanid:
@@ -3524,17 +3485,17 @@ def Oper_function(self, param):
                         if "O" not in self._MODE_:
                             self._MODE_ = self._MODE_ + "aoO"
                         opid.operator_level = 3
-                        raw_messages.raw(self, "381", self.nickname, "You are now an Administrator")
+                        raw_messages.raw(self, "381", self.nickname, "You are now a Server Administrator")
                     elif "a" in opid.flags:
                         if "a" not in self._MODE_:
                             self._MODE_ = self._MODE_ + "ao"
                         opid.operator_level = 2
-                        raw_messages.raw(self, "381", self.nickname, "You are now a System Chat Manager")
+                        raw_messages.raw(self, "381", self.nickname, "You are now a System Operator")
                     elif "o" in opid.flags:
                         if "o" not in self._MODE_:
                             self._MODE_ = self._MODE_ + "o"
                         opid.operator_level = 1
-                        raw_messages.raw(self, "381", self.nickname, "You are now a System Operator")
+                        raw_messages.raw(self, "381", self.nickname, "You are now a IRC Operator")
 
                     if "w" in opid.flags:
                         opid.watchserver = True
@@ -5115,10 +5076,6 @@ def Nickserv_function(self, param, msgtype=""):
                 logger.debug(exception)
                 self.send(":%s!%s@%s %s %s :Syntax: \x02REGISTER \x1Fpassword\x1F \x1Femail\x1F\x02\r\n" %
                           ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self.nickname))
-
-        elif param[1] == "HELLO":
-            self.send(":%s!%s@%s %s %s :hello to you too!\r\n" %
-                      ("NickServ", "NickServ", server_context.configuration.network_name, replyType, self.nickname))
 
         elif param[1] == "IPLOCK":
             if len(param) == 2:

@@ -26,6 +26,49 @@ class PartCommand(Command):
                 self._raw_messages.raw(user, "403", user.nickname, channel_name)
 
 
+class CreateCommand(Command):
+    def __init__(self, server_context: ServerContext,
+                 raw_messages: Raw):
+        self._server_context = server_context
+        self._raw_messages = raw_messages
+
+    def execute(self, user: User, parameters: List[str]):
+        if parameters[1].lower() in self._server_context.channel_entries:
+            self._raw_messages.raw(user, "705", user.nickname, parameters[1])
+
+        elif user.has_reached_max_channels():
+            self._raw_messages.raw(user, "405", user.nickname, parameters[1])
+
+        elif len(self._server_context.channel_entries) >= self._server_context.configuration.max_channels:
+            self._raw_messages.raw(user, "710", user.nickname, self._server_context.configuration.max_channels)
+
+        else:
+            creation_modes = " ".join(parameters[2:])
+
+            if len(parameters) == 2:
+                creation_modes = "0"
+
+            if user.nickname.lower() in self._server_context.operator_entries:
+                creation_modes = creation_modes.replace("r", "").replace("e", "")
+
+            else:
+                creation_modes = creation_modes.replace(
+                    "r", "").replace(
+                    "N", "").replace(
+                    "A", "").replace(
+                    "a", "").replace(
+                    "d", "").replace(
+                    "e", "")
+
+            created_channel = Channel(
+                self._server_context,
+                self._raw_messages,
+                parameters[1],
+                user.nickname, creation_modes)
+
+            self._server_context.add_channel(parameters[1], created_channel)
+
+
 class JoinCommand(Command):
     def __init__(self, server_context: ServerContext,
                  raw_messages: Raw):
