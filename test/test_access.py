@@ -21,30 +21,32 @@ class AccessTest(unittest.TestCase):
     def setUp(self):
         logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
+        self.server_context: ServerContext = ServerContext()
+        self.server_context.configuration.access_database_file = "/tmp/access.dat"
+
         server.statistics = MagicMock()
 
     def test_write_users_should_save_access(self):
         # Given
-        server_context: ServerContext = ServerContext()
-        server.server_context = server_context
+        server.server_context = self.server_context
 
         access_information = access.AccessInformation("#somewhere", "OWNER", "*", "a@b", 0, "tag", 2)
 
-        server_context.server_access_entries = [access_information]
+        self.server_context.server_access_entries = [access_information]
 
         # When
         server.WriteUsers(False, False, True)
 
         # Then
-        with open("database/access.dat", "rb") as file:
+        with open(self.server_context.configuration.access_database_file, "rb") as file:
             server_access: List[access.AccessInformation] = loads(file.read())
 
-            self.assertEqual(server_access[0]._object, server_context.server_access_entries[0]._object)
-            self.assertEqual(server_access[0]._level, server_context.server_access_entries[0]._level)
-            self.assertEqual(server_access[0]._reason, server_context.server_access_entries[0]._reason)
-            self.assertEqual(server_access[0]._mask, server_context.server_access_entries[0]._mask)
-            self.assertEqual(server_access[0]._setby, server_context.server_access_entries[0]._setby)
-            self.assertEqual(server_access[0]._setat, server_context.server_access_entries[0]._setat)
-            self.assertEqual(server_access[0]._oplevel, server_context.server_access_entries[0]._oplevel)
-            self.assertEqual(server_access[0]._expires, server_context.server_access_entries[0]._expires)
-            self.assertEqual(server_access[0]._deleteafterexpire, server_context.server_access_entries[0]._deleteafterexpire)
+            self.assertEqual(server_access[0]._object, self.server_context.server_access_entries[0]._object)
+            self.assertEqual(server_access[0]._level, self.server_context.server_access_entries[0]._level)
+            self.assertEqual(server_access[0]._reason, self.server_context.server_access_entries[0]._reason)
+            self.assertEqual(server_access[0]._mask, self.server_context.server_access_entries[0]._mask)
+            self.assertEqual(server_access[0]._setby, self.server_context.server_access_entries[0]._setby)
+            self.assertEqual(server_access[0]._setat, self.server_context.server_access_entries[0]._setat)
+            self.assertEqual(server_access[0]._oplevel, self.server_context.server_access_entries[0]._oplevel)
+            self.assertEqual(server_access[0]._expires, self.server_context.server_access_entries[0]._expires)
+            self.assertEqual(server_access[0]._deleteafterexpire, self.server_context.server_access_entries[0]._deleteafterexpire)
