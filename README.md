@@ -1,5 +1,5 @@
 
-# pyRCX (heavy refactor in progress - outdated and old code)
+# pyRCX (heavy refactor in progress)
 
   
 
