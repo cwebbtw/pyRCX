@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import Mock
 
-from pyRCX.commands.channel import JoinCommand, PartCommand
-from pyRCX.commands.list import ListCommand
+from pyRCX.commands.channel import JoinCommand
+from pyRCX.commands.topic import TopicCommand
 from pyRCX.server_context import ServerContext
 from pyRCX.user import User
 
@@ -26,8 +26,10 @@ class ListCommandsTest(unittest.TestCase):
         join_command: JoinCommand = JoinCommand(self.server_context, self.raw_messages)
         join_command.execute(self.user, ["JOIN", channel_name])
 
-        list_command: ListCommand = ListCommand(self.server_context, self.raw_messages)
-        list_command.execute(self.user, ["LIST"])
+        mock = Mock()
+        self.server_context.get_channel(channel_name).change_topic = mock
 
-        self.raw_messages.raw.assert_any_call(self.user, "322", self.user.nickname, channel_name, "1", "")
+        topic_command: TopicCommand = TopicCommand(self.server_context, self.raw_messages)
+        topic_command.execute(self.user, ["TOPIC", channel_name, "Hello"])
 
+        mock.assert_called_once_with(self.user, "Hello")

@@ -18,6 +18,7 @@ from zlib import compress, decompress
 from .channel import Channel
 from .commands.channel import JoinCommand, PartCommand
 from .commands.list import ListCommand
+from .commands.topic import TopicCommand
 from .filtering import FilterEntry, Filtering
 from .nickserv import NickServEntry
 from .operator import OperatorEntry
@@ -33,17 +34,17 @@ import pyRCX.access as access_helper
 server_context: ServerContext = ServerContext()
 
 filtering: Filtering = server_context.configuration.filtering
-
-disabled_functionality: Dict[str, int] = {}
-
 statistics: Statistics = Statistics(server_context)
 
-raw_messages = Raw(server_context.configuration, statistics, disabled_functionality)
+raw_messages = Raw(server_context.configuration, statistics)
+
+access_helper.initialise(server_context, raw_messages)
 
 # Commands
 join_command: JoinCommand = JoinCommand(server_context, raw_messages)
 part_command: PartCommand = PartCommand(server_context, raw_messages)
 list_command: ListCommand = ListCommand(server_context, raw_messages)
+topic_command: TopicCommand = TopicCommand(server_context, raw_messages)
 # Here are some settings, these can be coded into the conf later I suppose
 
 character_encoding = "latin1"
@@ -155,7 +156,7 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
 
         # TODO this does not fix an existing race condition where the filters may be bypassed whilst a rehash is occurring
         filtering.clear_filters()
-        disabled_functionality.clear()
+        server_context.configuration.disabled_functionality.clear()
 
         for lineStr in myfile.readlines():
 
@@ -223,7 +224,7 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
                 else:
                     value = s_line[2].split(";")[0]
 
-                disabled_functionality[s_line[1].upper()] = value
+                server_context.configuration.disabled_functionality[s_line[1].upper()] = value
 
             if lineStr[0] == "H":
                 s_line = lineStr.split(":")
@@ -734,9 +735,9 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
             return False
 
     def _isDisabled(self, command):
-        if command in disabled_functionality:
+        if command in server_context.configuration.disabled_functionality:
 
-            val = disabled_functionality[command]
+            val = server_context.configuration.disabled_functionality[command]
             operlevel = 0
             if self.nickname.lower() in server_context.operator_entries:
                 opid = server_context.operator_entries[self.nickname.lower()]
@@ -1408,7 +1409,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                 self.send(":" + server_context.configuration.server_name +
                                                           " NOTICE STATS :*** Viewing Disabled statistics '" +
                                                           param[1][0] + "' \r\n")
-                                                for each in disabled_functionality:
+                                                for each in server_context.configuration.disabled_functionality:
                                                     self.send(
                                                         ":" + server_context.configuration.server_name + " 212 " + self.nickname + " :" + each + "\r\n")
 
@@ -1418,7 +1419,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                           param[1][0] + "' \r\n")
                                                 self.send(
                                                     ":" + server_context.configuration.server_name + " 212 " + self.nickname +
-                                                    " :Creation Modes: " + DefaultModes + "\r\n")
+                                                    " :Creation Modes: " + server_context.configuration.default_modes + "\r\n")
                                                 self.send(
                                                     ":" + server_context.configuration.server_name + " 212 " + self.nickname + " :Max Channels: " +
                                                     server_context.configuration.max_channels + "\r\n")
@@ -1672,59 +1673,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                     Mode_function(self, param, strdata)
 
                                 elif param[0] == "TOPIC":
-                                    if len(param) == 2:
-                                        if chanid:
-                                            if isSecret(chanid,
-                                                        "private") and self.nickname.lower() not in server_context.operator_entries and self.nickname.lower() not in chanid._users:
-                                                raw_messages.raw(self, "331", self.nickname, chanid.channelname)
-                                            else:
-                                                if chanid._topic != "":
-                                                    raw_messages.raw(self, "332", self.nickname, chanid.channelname,
-                                                                     chanid._topic)
-                                                    raw_messages.raw(self, "333", self.nickname, chanid.channelname,
-                                                                     chanid._topic_nick, chanid._topic_time)
-
-                                                else:
-                                                    raw_messages.raw(self, "331", self.nickname, chanid.channelname)
-                                        else:
-                                            raw_messages.raw(self, "403", self.nickname, param[1])
-
-                                    else:
-                                        if chanid:
-                                            if self.nickname.lower() in chanid._users:
-                                                dotopic = False
-
-                                                if chanid.MODE_optopic == False or self.nickname.lower() in chanid._op or self.nickname.lower() in chanid._owner:
-                                                    dotopic = True
-
-                                                if dotopic:
-                                                    if chanid.MODE_ownertopic and self.nickname.lower() not in chanid._owner:
-                                                        raw_messages.raw(self, "485", self.nickname,
-                                                                         chanid.channelname)
-                                                    else:
-                                                        chanid._topic = param[2]
-                                                        if chanid._topic[0] == ":":
-                                                            chanid._topic = strdata.split(" ", 2)[2][1:]
-
-                                                        if chanid._topic == "":
-                                                            chanid._topic = ""
-                                                        else:
-                                                            chanid._topic_nick = self.nickname
-                                                            chanid._topic_time = GetEpochTime()
-
-                                                        for each in chanid._users:
-                                                            clientid = \
-                                                                server_context.nickname_to_client_mapping_entries[each]
-                                                            clientid.send(
-                                                                ":%s!%s@%s TOPIC %s :%s\r\n" % (
-                                                                    self.nickname, self._username, self._hostmask,
-                                                                    chanid.channelname, chanid._topic))
-                                                else:
-                                                    raw_messages.raw(self, "482", self.nickname, chanid.channelname)
-                                            else:
-                                                raw_messages.raw(self, "442", self.nickname, chanid.channelname)
-                                        else:
-                                            raw_messages.raw(self, "403", self.nickname, param[1])
+                                    topic_command.execute(self, param)
 
                                 elif param[0] == "OPER":
                                     Oper_function(self, param)
@@ -2297,6 +2246,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                 else:
                                                     raw_messages.raw(self, "900", self.nickname, param[1])
                                             except:
+                                                self.logger.debug(traceback.format_exc())
                                                 raw_messages.raw(self, "903", self.nickname, param[1])
 
                                     elif param[1] == "*" or param[1] == "$" or param[
@@ -3000,13 +2950,13 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                                                 if param[1].lower() not in createmute:
                                                     createmute[param[1].lower()] = self
-                                                    chanclass = Channel(
+                                                    created_channel = Channel(
                                                         server_context,
                                                         raw_messages,
                                                         param[1],
                                                         self.nickname, creationmodes)  # create
-                                                    if chanclass.channelname != "":
-                                                        server_context.channel_entries[param[1].lower()] = chanclass
+                                                    if created_channel.channelname != "":
+                                                        server_context.add_channel(param[1], created_channel)
 
                                                     del createmute[param[1].lower()]
                                                 else:

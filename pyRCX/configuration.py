@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 
 from pyRCX.filtering import Filtering
 
@@ -11,6 +11,7 @@ class Configuration:
     _DEFAULT_MODES = "ntl 75"
     _DEFAULT_SERVER_NAME = "pyRCXServ01"
     _DEFAULT_NETWORK_NAME = "pyRCXNet"
+    _DEFAULT_DISABLED_FUNCTIONALITY = {}
     _DEFAULT_PROFANITY: List[str] = []
     _DEFAULT_FLOODING_EXEMPT_COMMANDS: List[str] = []
     _DEFAULT_SERVER_ADMIN_NAME = "pyRCX Admin"
@@ -36,6 +37,7 @@ class Configuration:
         self.server_name: str = Configuration._DEFAULT_SERVER_NAME
         self.network_name: str = Configuration._DEFAULT_NETWORK_NAME
         self.profanity_entries: List[str] = Configuration._DEFAULT_PROFANITY
+        self.disabled_functionality: Dict[str, int] = Configuration._DEFAULT_DISABLED_FUNCTIONALITY
         self.flooding_exempt_commands: List[str] = Configuration._DEFAULT_FLOODING_EXEMPT_COMMANDS
         self.server_admin_name: str = Configuration._DEFAULT_SERVER_ADMIN_NAME
         self.server_admin_organisation: str = Configuration._DEFAULT_SERVER_ADMIN_ORGANISATION

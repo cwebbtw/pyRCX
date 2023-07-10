@@ -8,13 +8,12 @@ from pyRCX.statistics import Statistics
 
 class Raw:
 
-    def __init__(self, configuration: Configuration, statistics: Statistics,
-                 disabled_functionality: Dict[str, int]):
+    def __init__(self, configuration: Configuration, statistics: Statistics):
         self.logger = logging.getLogger('RAW')
 
         self.configuration: Configuration = configuration
         self.statistics: Statistics = statistics
-        self.disabled_functionality: Dict[str, int] = disabled_functionality
+        self.disabled_functionality: Dict[str, int] = configuration.disabled_functionality
 
     def raw(self, param1: User, param2="", param3="", param4="", param5="", param6="", param7=""):
         if param3 == "":

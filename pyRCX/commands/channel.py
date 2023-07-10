@@ -1,5 +1,3 @@
-import time
-from random import random
 from typing import Dict, List
 
 from pyRCX.channel import Channel
@@ -51,6 +49,7 @@ class JoinCommand(Command):
                         if len(parameters) > 2:
                             if parameters[2] == channel.MODE_key:
                                 channel.join(user.nickname, parameters[2])
+
                             elif parameters[2] == channel._prop.ownerkey:
                                 if user.nickname.lower() not in channel._owner:
                                     if user.nickname.lower() not in channel._users:
@@ -61,12 +60,12 @@ class JoinCommand(Command):
                             elif parameters[2] == channel._prop.hostkey:
                                 if user.nickname.lower() not in channel._op and user.nickname.lower() not in channel._users:
                                     channel._op.append(user.nickname.lower())
+
                                 channel.join(user.nickname, parameters[2])
 
                             else:
                                 # send error to  user
-                                self._raw_messages.raw(user, "475", user.nickname,
-                                                       channel.channelname)
+                                self._raw_messages.raw(user, "475", user.nickname, channel.channelname)
                                 if channel.MODE_knock:
                                     for each in channel._users:  # need to check for knock mode
                                         each_channel_user = self._nickname_to_client_mapping_entries.get(each.lower(),
@@ -81,8 +80,7 @@ class JoinCommand(Command):
 
                         else:
                             # send error to  user
-                            self._raw_messages.raw(user, "475", user.nickname,
-                                                   channel.channelname)
+                            self._raw_messages.raw(user, "475", user.nickname, channel.channelname)
                             if channel.MODE_knock:
                                 for each in channel._users:  # need to check for knock mode
                                     each_channel_user = self._nickname_to_client_mapping_entries.get(each.lower(), None)
@@ -111,24 +109,6 @@ class JoinCommand(Command):
                     elif self._configuration.channel_lockdown == 1:
                         self._raw_messages.raw(user, "702", user.nickname)
                     else:
-                        channel = Channel(self._server_context, self._raw_messages, channel_name,
-                                          user.nickname)  # create
+                        channel = Channel(self._server_context, self._raw_messages, channel_name, user.nickname)
                         if channel.channelname != "":
-                            self._channel_entries[channel_name.lower()] = channel
-
-                        # if parameters[1].lower() not in createmute:
-                        #     createmute[parameters[1].lower()] = self
-                        #     channel = Channel(
-                        #         channel_name,
-                        #         self._nickname)  # create
-                        #     if channel.channelname != "":
-                        #         channel_entries[
-                        #             channel_name.lower()] = channel
-                        #
-                        #     del createmute[parameters[1].lower()]
-                        # else:
-                        #     # TODO what in the name of concurrency was I doing?!
-                        #     time.sleep(0.1)
-                        #     channel = self._channel_entries.get(channel_name.lower(), None)
-                        #     if channel:
-                        #         channel.join(self._nickname)
+                            self._server_context.add_channel(channel_name, channel)

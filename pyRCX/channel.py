@@ -1,14 +1,12 @@
 import re
 import threading
 import time
-
 from copy import copy
 
+import pyRCX.access as access_helper
 from .helpers import int_or_zero
 from .raw import Raw
 from .server_context import ServerContext
-
-import pyRCX.access as access_helper
 
 
 class ChannelProperties:
@@ -370,12 +368,12 @@ class Channel:
             return False
         for each in self.ChannelAccess:
             if each._level.upper() == "DENY":
-                ret = access_helper.MatchAccess(self._server_context, each._mask, cid)
+                ret = access_helper.MatchAccess(each._mask, cid)
                 if ret == 1:
                     _override = False
                     for eachgrant in self.ChannelAccess:
                         if eachgrant._level.upper() != "DENY":
-                            gret = access_helper.MatchAccess(self._server_context, eachgrant._mask, cid)
+                            gret = access_helper.MatchAccess(eachgrant._mask, cid)
                             if gret == 1:
                                 _override = True
                                 break
@@ -425,6 +423,10 @@ class Channel:
 
     def should_send_names(self):
         return self.MODE_secret or self.MODE_servicechan or self.MODE_hidden or self.MODE_private
+
+    def topic_visible_for_nickname(self, nickname):
+        return (not self.MODE_secret and not self.MODE_private) or (
+                self._server_context.get_operator(nickname) is not None or nickname.lower() in self._users)
 
     def visible_in_list(self):
         return not self.MODE_secret and not self.MODE_private
@@ -588,12 +590,12 @@ class Channel:
             if nick.lower() not in self._operator_entries and nick.lower() not in self._op and nick.lower() not in self._owner:
                 for each in self.ChannelAccess:
                     if each._level.upper() == "DENY":
-                        ret = access_helper.MatchAccess(self._server_context, each._mask, cclientid)
+                        ret = access_helper.MatchAccess(each._mask, cclientid)
                         if ret == 1:
                             _override = False
                             for eachgrant in self.ChannelAccess:
                                 if eachgrant._level.upper() != "DENY":
-                                    gret = access_helper.MatchAccess(self._server_context, eachgrant._mask, cclientid)
+                                    gret = access_helper.MatchAccess(eachgrant._mask, cclientid)
                                     if gret == 1:
                                         _override = True
                                         break
@@ -671,7 +673,7 @@ class Channel:
         if joinuser.lower() not in self._operator_entries and _r != -1 and _r != -4 and _r != 0 and _r != -6:  # opers not affected
             for each in self.ChannelAccess:
                 if each._level.upper() != "DENY" and each._level.upper() != "GRANT":
-                    ret = access_helper.MatchAccess(self._server_context, each._mask, cclientid)
+                    ret = access_helper.MatchAccess(each._mask, cclientid)
                     if ret == 1:
                         if each._level.upper() == "OWNER":
                             if joinuser.lower() in self._op:
@@ -1007,6 +1009,9 @@ class Channel:
         if content.__len__() > 512:
             self._raw_messages.raw(user, "905", user.nickname, self.channelname)
         else:
+            if user.nickname.lower() not in self._users:
+                self._raw_messages.raw(user, "442", user.nickname, self.channelname)
+
             if self.MODE_optopic == False or user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
                 if self.MODE_ownertopic and user.nickname.lower() not in self._owner:
                     self._raw_messages.raw(user, "485", user.nickname, self.channelname)
@@ -1019,8 +1024,8 @@ class Channel:
                         self._topic_time = int(time.time())
 
                     for each in self._users:
-                        cid = self._server_context.nickname_to_client_mapping_entries[each]
-                        cid.send(
+                        each_channel_user = self._server_context.get_user(each)
+                        each_channel_user.send(
                             ":%s!%s@%s TOPIC %s :%s\r\n" %
                             (user.nickname, user._username, user._hostmask, self.channelname, self._topic))
             else:
