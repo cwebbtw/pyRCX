@@ -13,6 +13,14 @@ class Configuration:
     _DEFAULT_MAX_CHANNELS = 100
     _DEFAULT_MODES = "ntl 75"
 
+    # Unregistered users will have the value prefixed with their identity,
+    # allowing finesse control for operators of the network, server or channel
+    _DEFAULT_UNREGISTERED_USER_IDENTITY_PREFIX = "~"
+
+    # No host masking (warning: user connecting address will be visible to others)
+    _DEFAULT_USER_HOST_MASKING_STYLE = 0
+    _DEFAULT_USER_HOST_MASKING_STYLE_PARAMETER = None
+
     _DEFAULT_SERVER_NAME = "pyRCXServ01"
     _DEFAULT_NETWORK_NAME = "pyRCXNet"
 
@@ -24,6 +32,8 @@ class Configuration:
 
     _DEFAULT_SERVER_ADMIN_NAME = "pyRCX Admin"
     _DEFAULT_SERVER_ADMIN_ORGANISATION = "pyRCX Administration Group"
+    _DEFAULT_SERVER_PASSWORD: str | None = None
+    _DEFAULT_SERVER_PASSWORD_REQUIRED_MESSAGE = "This server requires a password"
 
     # This value will be overriden if a value in the config is specified
     # Production servers should not leave the operator line (o:line) value empty
@@ -56,6 +66,12 @@ class Configuration:
         self.flooding_exempt_commands: List[str] = Configuration._DEFAULT_FLOODING_EXEMPT_COMMANDS
         self.server_admin_name: str = Configuration._DEFAULT_SERVER_ADMIN_NAME
         self.server_admin_organisation: str = Configuration._DEFAULT_SERVER_ADMIN_ORGANISATION
+        self.server_password: str | None = Configuration._DEFAULT_SERVER_PASSWORD
+        self.server_password_required_message: str | None = Configuration._DEFAULT_SERVER_PASSWORD_REQUIRED_MESSAGE
+        self.unregistered_user_identity_prefix: str = Configuration._DEFAULT_UNREGISTERED_USER_IDENTITY_PREFIX
+        self.user_host_masking_style: int = Configuration._DEFAULT_USER_HOST_MASKING_STYLE
+        self.user_host_masking_style_parameter: str | None = Configuration._DEFAULT_USER_HOST_MASKING_STYLE_PARAMETER
+
         self.unencrypted_ports: List[int] = Configuration._DEFAULT_UNENCRYPTED_PORTS
 
         self.channels_database_file: str = Configuration._DEFAULT_CHANNELS_DATABASE

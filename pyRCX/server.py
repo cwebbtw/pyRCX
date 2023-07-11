@@ -21,6 +21,7 @@ import pyRCX.access as access_helper
 from .channel import Channel
 from .commands.channel import JoinCommand, PartCommand, CreateCommand
 from .commands.list import ListCommand
+from .commands.registration import UserCommand
 from .commands.topic import TopicCommand
 from .filtering import FilterEntry, Filtering
 from .helpers import int_or_zero
@@ -39,11 +40,12 @@ raw_messages: Raw = Raw(server_context.configuration, statistics)
 access_helper.initialise(server_context, raw_messages)
 
 # Commands
-join_command: JoinCommand = JoinCommand(server_context, raw_messages)
-part_command: PartCommand = PartCommand(server_context, raw_messages)
 create_command: CreateCommand = CreateCommand(server_context, raw_messages)
+join_command: JoinCommand = JoinCommand(server_context, raw_messages)
 list_command: ListCommand = ListCommand(server_context, raw_messages)
+part_command: PartCommand = PartCommand(server_context, raw_messages)
 topic_command: TopicCommand = TopicCommand(server_context, raw_messages)
+user_command: UserCommand = UserCommand(server_context, raw_messages)
 
 character_encoding = "latin1"
 
@@ -52,14 +54,9 @@ NickfloodWait = 30
 MaxServerEntries = 0
 MaxUserEntries = 0
 MaxChannelEntries = 0
-HostMasking = 0
-HostMaskingParam = ""
 ipaddress = ""
-PrefixChar = ""
 AdminPassword = ""
 ServerAddress = ""
-ServerPassword = ""
-passmsg = ""
 MaxUsers = 10
 MaxUsersPerConnection = 3
 NickservParam = ""
@@ -140,8 +137,8 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
     try:
         global ServerAddress, connectionsExempt
         global MaxUsers, MaxUsersPerConnection, NickfloodAmount, NickfloodWait
-        global NickservParam, ipaddress, AdminPassword, ServerPassword
-        global passmsg, HostMaskingParam, HostMasking, PrefixChar, MaxServerEntries, MaxChannelEntries, MaxUserEntries
+        global NickservParam, ipaddress, AdminPassword
+        global MaxServerEntries, MaxChannelEntries, MaxUserEntries
         global defconMode, UserDefaultModes
 
         connectionsExempt = []
@@ -185,10 +182,6 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
                 if defconMode != 1 and defconMode != 2 and defconMode != 3:
                     defconMode = 1
 
-            if lineStr[0] == "T":
-                # Currently unused until linking
-                pass
-
             if lineStr[0] == "I":
                 s_line = lineStr.split(":")
                 ipaddress = s_line[1].split(";")[0]
@@ -201,8 +194,8 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
 
             if lineStr[0] == "P":
                 s_line = lineStr.split(":")
-                ServerPassword = s_line[1]
-                passmsg = s_line[2].split(";")[0]
+                server_context.configuration.server_password = s_line[1] or None
+                server_context.configuration.server_password_required_message = s_line[2].split(";")[0] or None
 
             if lineStr[0] == "p":
                 s_line = lineStr.split(":")
@@ -223,12 +216,12 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
 
             if lineStr[0] == "H":
                 s_line = lineStr.split(":")
-                HostMasking = s_line[1]
-                HostMaskingParam = s_line[2].split(";")[0]
+                server_context.configuration.user_host_masking_style = int(s_line[1])
+                server_context.configuration.user_host_masking_style_parameter = s_line[2].split(";")[0].strip() or None
 
             if lineStr[0] == "s":
                 s_line = lineStr.split(":")
-                PrefixChar = s_line[1].split(";")[0]
+                server_context.configuration.unregistered_user_identity_prefix = s_line[1].split(";")[0]
 
             if lineStr[0] == "X":
                 s_line = lineStr.split(":")
@@ -677,8 +670,8 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
             self._MODE_.replace("r", "")
             self.send(":%s!%s@%s MODE %s -r\r\n" % (
             "NickServ", "NickServ", server_context.configuration.network_name, self.nickname))
-            if self._username[0] != PrefixChar and self.nickname.lower() not in server_context.operator_entries:
-                self._username = PrefixChar + self._username
+            if self._username[0] != server_context.configuration.unregistered_user_identity_prefix and self.nickname.lower() not in server_context.operator_entries:
+                self._username = server_context.configuration.unregistered_user_identity_prefix + self._username
 
         is_groupednick = False
 
@@ -708,7 +701,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
     def _logoncheck(self):
         if self._username != "" and self.nickname != "" and self._welcome == False and self.nickname.lower() not in server_context.nickname_to_client_mapping_entries:
-            if ServerPassword != "" and self._password == False:
+            if server_context.configuration.server_password is not None and self._password == False:
                 return False
 
             self._welcome = True
@@ -823,7 +816,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
 
                 self.quittype = 10
             else:
-                if str(HostMasking) == "2":
+                if server_context.configuration.user_host_masking_style == 2:
                     self.send(
                         ":" + server_context.configuration.server_name + " NOTICE AUTH :*** Looking up your hostname...\r\n")
 
@@ -840,13 +833,13 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                             ":" + server_context.configuration.server_name +
                             " NOTICE AUTH :*** Could not find your hostname, using your IP instead\r\n")
 
-                if str(HostMasking) == "0":
+                if server_context.configuration.user_host_masking_style == 0:
                     self._hostmask = self.details[0]
-                elif str(HostMasking) == "1":
+                elif server_context.configuration.user_host_masking_style == 1:
                     self._hostmask = self.details[0].split(".")[0] + "." + self.details[0].split(".")[1] + ".XXX.XXX"
 
-                elif str(HostMasking) == "2":
-                    shortmask = sha256((self.details[0] + HostMaskingParam).encode('utf-8')).hexdigest().upper()[:5]
+                elif server_context.configuration.user_host_masking_style == 2:
+                    shortmask = sha256((self.details[0] + server_context.configuration.user_host_masking_style_parameter).encode('utf-8')).hexdigest().upper()[:5]
 
                     if self._hostname == self.details[0]:  # 127.0.0.1 - 127.0.A4EFF
                         maskstart = self._hostname.split(".", 2)[2]
@@ -858,25 +851,25 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                         except:
                             self._hostmask = shortmask
 
-                elif str(HostMasking) == "3":
-                    self._hostmask = HostMaskingParam
+                elif server_context.configuration.user_host_masking_style == 3:
+                    self._hostmask = server_context.configuration.user_host_masking_style_parameter
 
-                elif str(HostMasking) == "4":
+                elif server_context.configuration.user_host_masking_style == 4:
                     self._hostmask = sha256(
-                        (self.details[0] + HostMaskingParam).encode('utf-8')).hexdigest().upper()[:16]
+                        (self.details[0] + server_context.configuration.user_host_masking_style_parameter).encode('utf-8')).hexdigest().upper()[:16]
 
-                elif str(HostMasking) == "5":
-                    self._hostmask = HostMaskingParam
+                elif server_context.configuration.user_host_masking_style == 5:
+                    self._hostmask = server_context.configuration.user_host_masking_style_parameter
 
-                elif str(HostMasking) == "6":
-                    shastring = sha256((self.details[0] + HostMaskingParam).encode('utf-8')).hexdigest().upper()
+                elif server_context.configuration.user_host_masking_style == 6:
+                    shastring = sha256((self.details[0] + server_context.configuration.user_host_masking_style_parameter).encode('utf-8')).hexdigest().upper()
                     self._hostmask = self.details[0].split(
                         ".")[0] + "." + self.details[0].split(".")[1] + "." + shastring[0:3] + "." + shastring[3:6]
                 else:
                     self._hostmask = self.details[0]
 
-                if ServerPassword != "":
-                    self.send(":" + server_context.configuration.server_name + " NOTICE AUTH :*** " + passmsg + "\r\n")
+                if server_context.configuration.server_password is not None:
+                    self.send(":" + server_context.configuration.server_name + " NOTICE AUTH :*** " + server_context.configuration.server_password_required_message + "\r\n")
 
                 self.send("PING :" + server_context.configuration.server_name + "\r\n")
                 self.client.setblocking(0)
@@ -918,6 +911,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                     strdata += c.decode(character_encoding)
 
                         except socket.error as xxx_todo_changeme:
+                            self.logger.debug(traceback.format_exc())
                             (value, message) = xxx_todo_changeme.args
                             if errno.ECONNABORTED == value or errno.ECONNRESET == value:
                                 self.quittype = 0
@@ -1011,11 +1005,11 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                             Nick_function(self, param)
 
                         elif param[0] == "PASS":  # PASS password
-                            if ServerPassword != "":
+                            if server_context.configuration.server_password is not None:
                                 if self._password:
                                     raw_messages.raw(self, "462", self.nickname)
                                 else:
-                                    if param[1] == ServerPassword:
+                                    if param[1] == server_context.configuration.server_password:
                                         self._password = True
                                         self.send(
                                             ":" + server_context.configuration.server_name + " NOTICE AUTH :*** Password accepted\r\n")
@@ -1058,12 +1052,12 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                         _fn = ""
                                     if self._validatefullname(_fn.replace(" ", "")) or _fn == "":
                                         self._fullname = _fn
-                                        if str(HostMasking) != "5":
-                                            self._username = PrefixChar + param[1].replace(PrefixChar, "")
+                                        if server_context.configuration.user_host_masking_style != 5:
+                                            self._username = server_context.configuration.unregistered_user_identity_prefix + param[1].replace(server_context.configuration.unregistered_user_identity_prefix, "")
 
-                                        elif str(HostMasking) == "5":
-                                            self._username = PrefixChar + sha256(
-                                                (self.details[0] + HostMaskingParam).encode(
+                                        elif server_context.configuration.user_host_masking_style == 5:
+                                            self._username = server_context.configuration.unregistered_user_identity_prefix + sha256(
+                                                (self.details[0] + server_context.configuration.user_host_masking_style_parameter).encode(
                                                     'utf-8')).hexdigest().upper()[:16]
 
                                         if self._logoncheck():
@@ -3660,8 +3654,8 @@ def Nick_function(self: ClientConnecting, param):
                                       (
                                       "NickServ", "NickServ", server_context.configuration.network_name, self.nickname))
                             if self._username[
-                                0] != PrefixChar and self.nickname.lower() not in server_context.operator_entries:
-                                self._username = PrefixChar + self._username
+                                0] != server_context.configuration.unregistered_user_identity_prefix and self.nickname.lower() not in server_context.operator_entries:
+                                self._username = server_context.configuration.unregistered_user_identity_prefix + self._username
 
                         if temp_nick.lower() in server_context.nickserv_entries or is_groupednick:
                             if self._MODE_register == False:
@@ -4899,7 +4893,7 @@ def Mode_function(self, param, strdata=""):
                                 self._MODE_ = self._MODE_.replace("b", "")
                                 self._MODE_ = self._MODE_.replace("n", "")
                                 if self._MODE_register == False:  # no longer oper, conform to nickserv modes
-                                    self._username = PrefixChar + self._username
+                                    self._username = server_context.configuration.unregistered_user_identity_prefix + self._username
 
                                 if self in server_context.secret_client_entries:
                                     server_context.secret_client_entries.remove(self)
@@ -5049,7 +5043,7 @@ def Nickserv_function(self, param, msgtype=""):
                         self._MODE_register = True
 
                         WriteUsers(True, False)
-                        if self._username[0] == PrefixChar:
+                        if self._username[0] == server_context.configuration.unregistered_user_identity_prefix:
                             self._username = self._username[1:]
                         if "r" not in self._MODE_:
                             self._MODE_ += "r"
@@ -5171,7 +5165,7 @@ def Nickserv_function(self, param, msgtype=""):
                             if "r" not in self._MODE_:
                                 self._MODE_ += "r"
 
-                            if self._username[0] == PrefixChar:
+                            if self._username[0] == server_context.configuration.unregistered_user_identity_prefix:
                                 self._username = self._username[1:]
                             self.send(":%s!%s@%s MODE %s +r\r\n" %
                                       (
@@ -5549,7 +5543,7 @@ def Nickserv_function(self, param, msgtype=""):
                                 WriteUsers(True, False)
                                 self._MODE_register = True
 
-                                if self._username[0] == PrefixChar:
+                                if self._username[0] == server_context.configuration.unregistered_user_identity_prefix:
                                     self._username = self._username[1:]
                                 if "r" not in self._MODE_:
                                     self._MODE_ += "r"
@@ -5617,8 +5611,8 @@ def Nickserv_function(self, param, msgtype=""):
                                         cid._MODE_.replace("r", "")
                                         cid._MODE_register = False
                                         if cid._username[
-                                            0] != PrefixChar and cid.nickname.lower() not in server_context.operator_entries:
-                                            cid._username = PrefixChar + cid._username[1:]
+                                            0] != server_context.configuration.unregistered_user_identity_prefix and cid.nickname.lower() not in server_context.operator_entries:
+                                            cid._username = server_context.configuration.unregistered_user_identity_prefix + cid._username[1:]
 
                                         cid.send(
                                             ":%s!%s@%s MODE %s -r\r\n" %

@@ -17,7 +17,8 @@ class User:
 
     def __init__(self, configuration: Configuration):
         # Public
-        self.nickname = ""
+        self.nickname = "" # this should be None
+        self.presented_password = False
 
         # TODO a mixture of public and private variables that need reviewing
         self._configuration = configuration
@@ -52,6 +53,7 @@ class User:
 
     def has_reached_max_channels(self) -> bool:
         return len(self._channels) >= self._configuration.max_channels_per_user
+
 
     def join(self, channel):
         if not self.has_reached_max_channels():
