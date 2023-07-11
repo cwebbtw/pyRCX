@@ -1,4 +1,4 @@
-from typing import Dict, Set, List
+from typing import Dict, Set, List, Any
 
 from pyRCX.nickserv import NickServEntry
 from pyRCX.configuration import Configuration
@@ -22,6 +22,8 @@ class ServerContext:
         self.nickserv_entries: Dict[str, NickServEntry] = {}
         self.server_access_entries: List[AccessInformation] = []
         self.configuration: Configuration = Configuration()
+
+        self.currently_active_listeners: Dict[int, Any] = {}
 
     def add_channel(self, channel_name, channel):
         self.channel_entries[channel_name.lower()] = channel

@@ -20,6 +20,8 @@ class Configuration:
     _DEFAULT_PROFANITY: List[str] = []
     _DEFAULT_FLOODING_EXEMPT_COMMANDS: List[str] = []
 
+    _DEFAULT_UNENCRYPTED_PORTS: List[int] = [6667]
+
     _DEFAULT_SERVER_ADMIN_NAME = "pyRCX Admin"
     _DEFAULT_SERVER_ADMIN_ORGANISATION = "pyRCX Administration Group"
 
@@ -54,6 +56,7 @@ class Configuration:
         self.flooding_exempt_commands: List[str] = Configuration._DEFAULT_FLOODING_EXEMPT_COMMANDS
         self.server_admin_name: str = Configuration._DEFAULT_SERVER_ADMIN_NAME
         self.server_admin_organisation: str = Configuration._DEFAULT_SERVER_ADMIN_ORGANISATION
+        self.unencrypted_ports: List[int] = Configuration._DEFAULT_UNENCRYPTED_PORTS
 
         self.channels_database_file: str = Configuration._DEFAULT_CHANNELS_DATABASE
         self.access_database_file: str = Configuration._DEFAULT_ACCESS_DATABASE

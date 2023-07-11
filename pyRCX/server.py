@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import socket
@@ -64,7 +65,6 @@ MaxUsersPerConnection = 3
 NickservParam = ""
 defconMode = 1
 
-Ports = []
 temp_noopers = []
 connections = []
 
@@ -138,13 +138,12 @@ def WriteUsers(nicksv=True, chans=True, access=False):
 def rehash(par=1):  # this information will be rehashed by any operator with level 4 privlidges (Administrator)
     myfile = open(server_context.configuration.server_config_file, "r")
     try:
-        global ServerAddress, connectionsExempt, Ports
+        global ServerAddress, connectionsExempt
         global MaxUsers, MaxUsersPerConnection, NickfloodAmount, NickfloodWait
         global NickservParam, ipaddress, AdminPassword, ServerPassword
         global passmsg, HostMaskingParam, HostMasking, PrefixChar, MaxServerEntries, MaxChannelEntries, MaxUserEntries
         global defconMode, UserDefaultModes
 
-        Ports = []
         connectionsExempt = []
 
         line_num = 0
@@ -152,6 +151,7 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
         # TODO this does not fix an existing race condition where the filters may be bypassed whilst a rehash is occurring
         filtering.clear_filters()
         server_context.configuration.disabled_functionality.clear()
+        server_context.configuration.unencrypted_ports.clear()
 
         for lineStr in myfile.readlines():
 
@@ -206,7 +206,7 @@ def rehash(par=1):  # this information will be rehashed by any operator with lev
 
             if lineStr[0] == "p":
                 s_line = lineStr.split(":")
-                Ports.append(s_line[1].split(";")[0])
+                server_context.configuration.unencrypted_ports.append(int(s_line[1].split(";")[0]))
 
             if lineStr[0] == "f":
                 s_line = lineStr.split(":")
@@ -5783,14 +5783,17 @@ class ServerListen(threading.Thread):
                         (clientsocket, address) = smain.accept()
                         ClientConnecting(clientsocket, address, self.port).start()
                     except:
-                        if self.port not in Ports:
-                            print("*** Terminating server on port " + self.port)
+                        if self.port not in server_context.configuration.unencrypted_ports:
+                            self.logger.info(f"Terminating server on port {self.port}")
                             break
 
-                except:
-                    print("There was an error whilst a user was connecting")
-        except:
-            print("*** ERROR: Socket error on port " + str(self.port) + "(Bind Error)")
+                except Exception as error:
+                    self.logger.info("There was an error whilst a user was connecting")
+                    self.logger.debug(traceback.format_exc())
+
+        except Exception as error:
+            self.logger.error(f"Socket error on port {self.port} (Bind Error)")
+            self.logger.debug(traceback.format_exc())
 
         if self.port in currentports:
             del currentports[self.port]
@@ -5803,14 +5806,9 @@ def GetEpochTime():
 
 
 def SetupListeningSockets():
-    global currentports
-
-    for p in Ports:
-        if p not in currentports:  # If the port isn't already running, set it up, old ports will automatically timeout after five seconds
-            currentports[p] = ServerListen(p).start()
-
-
-import logging
+    for port in server_context.configuration.unencrypted_ports:
+        if port not in server_context.currently_active_listeners:
+            server_context.currently_active_listeners[port] = ServerListen(port).start()
 
 
 def start():
