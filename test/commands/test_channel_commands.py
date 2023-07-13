@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from pyRCX.commands.channel import JoinCommand, PartCommand, CreateCommand
+from pyRCX.commands.channel import JoinCommand, PartCommand, CreateCommand, InviteCommand
 from pyRCX.raw import Raw
 from pyRCX.server_context import ServerContext
 from pyRCX.user import User
@@ -11,7 +11,7 @@ class ChannelCommandsTest(unittest.TestCase):
 
     def setUp(self):
         self.server_context: ServerContext = ServerContext()
-        self.raw_messages: Raw = MagicMock()
+        self.raw_messages = MagicMock()
         self.user: User = User(self.server_context.configuration)
         self.user.nickname = "Christopher"
         self.server_context.add_user(self.user.nickname, self.user)
@@ -81,3 +81,41 @@ class ChannelCommandsTest(unittest.TestCase):
         self.assertIsNotNone(channel)
         self.assertTrue(channel.MODE_inviteonly)
         self.assertTrue(channel.MODE_externalmessages)
+
+    def test_cannot_join_invite_only_channel_without_invite(self):
+        channel_name1 = "#SoMeWheRe1"
+        create_command: CreateCommand = CreateCommand(self.server_context, self.raw_messages)
+        create_command.execute(self.user, ["CREATE", channel_name1, "ni"])
+
+        second_user: User = User(self.server_context.configuration)
+        second_user.nickname = "Daniel"
+        self.server_context.add_user(second_user.nickname, second_user)
+
+        self.raw_messages.reset_mock()
+
+        join_command: JoinCommand = JoinCommand(self.server_context, self.raw_messages)
+        join_command.execute(second_user, ["JOIN", channel_name1])
+
+        channel = self.server_context.get_channel(channel_name1)
+
+        self.assertFalse(channel.nickname_in_channel(second_user.nickname))
+        self.raw_messages.raw.assert_called_once_with(second_user, "473", second_user.nickname, channel_name1)
+
+    def test_can_join_invite_only_channel_with_invite(self):
+        channel_name1 = "#SoMeWheRe1"
+        create_command: CreateCommand = CreateCommand(self.server_context, self.raw_messages)
+        create_command.execute(self.user, ["CREATE", channel_name1, "ni"])
+
+        second_user: User = User(self.server_context.configuration)
+        second_user.nickname = "Daniel"
+        self.server_context.add_user(second_user.nickname, second_user)
+
+        invite_command: InviteCommand = InviteCommand(self.server_context, self.raw_messages)
+        invite_command.execute(self.user, ["INVITE", second_user.nickname, channel_name1])
+
+        join_command: JoinCommand = JoinCommand(self.server_context, self.raw_messages)
+        join_command.execute(second_user, ["JOIN", channel_name1])
+
+        channel = self.server_context.get_channel(channel_name1)
+
+        self.assertTrue(channel.nickname_in_channel(second_user.nickname))

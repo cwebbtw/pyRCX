@@ -958,6 +958,9 @@ class Channel:
         else:
             return True
 
+    def nickname_in_channel(self, nickname: str) -> bool:
+        return nickname.lower() in self._users
+
     def change_event_message(self, user, param3, sData, onmsg):
         if user.nickname.lower() in self._users:
             if user.nickname.lower() in self._op or user.nickname.lower() in self._owner:
