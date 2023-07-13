@@ -196,6 +196,8 @@ class Channel:
         creationmodes = creationmodes_full.split(" ")[0]
         if "Z" in creationmodes:
             self.MODE_noircx = True
+        if "i" in creationmodes:
+            self.MODE_inviteonly = True
         if "m" in creationmodes:
             self.MODE_moderated = True
         if "d" in creationmodes:

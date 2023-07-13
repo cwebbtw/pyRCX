@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from pyRCX.commands.channel import JoinCommand, PartCommand
+from pyRCX.commands.channel import JoinCommand, PartCommand, CreateCommand
 from pyRCX.raw import Raw
 from pyRCX.server_context import ServerContext
 from pyRCX.user import User
@@ -69,3 +69,15 @@ class ChannelCommandsTest(unittest.TestCase):
 
         self.assertEqual(self.server_context.get_channel(channel_name1), None)
         self.assertEqual(self.server_context.get_channel(channel_name2), None)
+
+    def test_can_create_channel_with_modes(self):
+        channel_name1 = "#SoMeWheRe1"
+        create_command: CreateCommand = CreateCommand(self.server_context, self.raw_messages)
+
+        create_command.execute(self.user, ["CREATE", channel_name1, "ni"])
+
+        channel = self.server_context.get_channel(channel_name1)
+
+        self.assertIsNotNone(channel)
+        self.assertTrue(channel.MODE_inviteonly)
+        self.assertTrue(channel.MODE_externalmessages)
