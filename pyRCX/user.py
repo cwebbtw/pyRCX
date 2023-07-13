@@ -1,7 +1,8 @@
-import logging
 from abc import abstractmethod
 
 from pyRCX.configuration import Configuration
+
+import pyRCX.access as access_helper
 
 
 class UserException(Exception):
@@ -17,7 +18,7 @@ class User:
 
     def __init__(self, configuration: Configuration):
         # Public
-        self.nickname = "" # this should be None
+        self.nickname = ""  # this should be None
         self.presented_password = False
 
         # TODO a mixture of public and private variables that need reviewing
@@ -54,10 +55,27 @@ class User:
     def has_reached_max_channels(self) -> bool:
         return len(self._channels) >= self._configuration.max_channels_per_user
 
-
     def join(self, channel):
         if not self.has_reached_max_channels():
             self._channels.append(channel)
+
+    def user_has_access_restrictions(self, target_user, is_operator) -> bool:
+        access_helper.CheckSelfExpiry(target_user)
+
+        if is_operator:
+            return False
+
+        for each in target_user._access:
+            if each._level == "DENY":
+                ret = access_helper.MatchAccess(each._mask, self)
+                if ret == 1:
+                    for each_grant in target_user._access:
+                        if each_grant._level == "GRANT":
+                            gret = access_helper.MatchAccess(each_grant._mask, self)
+                            if gret == 1:
+                                return False
+                    return True
+        return False
 
     # TODO this should not be on the clientbase class and this needs to be
     # renamed and removed from a hierarchical sense

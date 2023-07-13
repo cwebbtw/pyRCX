@@ -10,13 +10,65 @@ from pyRCX.server_context import ServerContext
 from pyRCX.user import User
 
 
+class InviteCommand(Command):
+
+    def __init__(self, server_context: ServerContext,
+                 _raw_messages: Raw):
+        self._server_context = server_context
+        self._raw_messages = _raw_messages
+
+    def execute(self, user: User, parameters: List[str]):
+        if user._MODE_inviteblock:
+            self._raw_messages.raw(user, "998", user.nickname, user.nickname, "*")
+        else:
+            channel = self._server_context.get_channel(parameters[2])
+            user_to_be_invited = self._server_context.get_user(parameters[1])
+
+            if channel is not None:
+                if user.nickname.lower() in channel._users:
+                    if user_to_be_invited is not None:
+                        if user.nickname.lower() in channel._op or user.nickname.lower() in channel._owner:
+                            if user_to_be_invited._MODE_inviteblock:
+                                self._raw_messages.raw(user, "998", user.nickname,
+                                                       user_to_be_invited.nickname, channel.channelname)
+                            else:
+                                if parameters[1].lower() in channel._users and parameters[1].lower() not in channel._watch:
+                                    self._raw_messages.raw(user, "443", user.nickname,
+                                                           user_to_be_invited.nickname, channel.channelname)
+                                else:
+
+                                    if not user.user_has_access_restrictions(user_to_be_invited,
+                                                                         self._server_context.get_operator(
+                                                                             user.nickname) is not None):
+                                        self._raw_messages.raw(user, "341", user.nickname,
+                                                               user_to_be_invited.nickname, channel.channelname)
+
+                                        user_to_be_invited.send(
+                                            ":%s!%s@%s INVITE %s :%s\r\n" %
+                                            (user.nickname, user._username, user._hostmask,
+                                             user_to_be_invited.nickname, channel.channelname))
+
+                                        user_to_be_invited._invites.append(channel.channelname.lower())
+                                    else:
+                                        self._raw_messages.raw(user, "913", user.nickname, user_to_be_invited.nickname)
+                        else:
+                            self._raw_messages.raw(user, "482", user.nickname,
+                                                   channel.channelname)
+                    else:
+                        self._raw_messages.raw(user, "401", user.nickname, parameters[1])
+                else:
+                    self._raw_messages.raw(user, "442", user.nickname, channel.channelname)
+            else:
+                self._raw_messages.raw(user, "403", user.nickname, parameters[2])
+
+
 class KickCommand(Command):
 
     def __init__(self, server_context: ServerContext,
                  _raw_messages: Raw):
         self._server_context = server_context
         self._raw_messages = _raw_messages
-        self._logger = logger = logging.getLogger('COMMAND')
+        self._logger = logging.getLogger('COMMAND')
 
     def execute(self, user: User, parameters: List[str]):
         channel = self._server_context.get_channel(parameters[1])
@@ -31,7 +83,7 @@ class KickCommand(Command):
 
                 for nickname_to_be_kicked in parameters[2].split(","):
                     if nickname_to_be_kicked in self._server_context.nickname_to_client_mapping_entries:
-                        if nickname_to_be_kicked in channel._users:
+                        if nickname_to_be_kicked.lower() in channel._users:
                             if len(kick_message) < 128:
                                 user_to_be_kicked = self._server_context.get_user(nickname_to_be_kicked)
                                 if not user_to_be_kicked:

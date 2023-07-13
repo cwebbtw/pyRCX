@@ -19,7 +19,7 @@ from zlib import compress, decompress
 import pyRCX.access as access_helper
 
 from .channel import Channel
-from .commands.channel import JoinCommand, PartCommand, CreateCommand, KickCommand
+from .commands.channel import JoinCommand, PartCommand, CreateCommand, KickCommand, InviteCommand
 from .commands.list import ListCommand
 from .commands.registration import UserCommand
 from .commands.topic import TopicCommand
@@ -41,6 +41,7 @@ access_helper.initialise(server_context, raw_messages)
 
 # Commands
 create_command: CreateCommand = CreateCommand(server_context, raw_messages)
+invite_command: InviteCommand = InviteCommand(server_context, raw_messages)
 join_command: JoinCommand = JoinCommand(server_context, raw_messages)
 kick_command: KickCommand = KickCommand(server_context, raw_messages)
 list_command: ListCommand = ListCommand(server_context, raw_messages)
@@ -716,7 +717,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
         else:
             return False
 
-    def _isDisabled(self, command):
+    def _is_disabled(self, command):
         if command in server_context.configuration.disabled_functionality:
 
             val = server_context.configuration.disabled_functionality[command]
@@ -958,7 +959,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                     self.logger.debug(f"[{','.join(param)}]")
 
                     _sleep = "%.4f" % (random() / 9)
-                    _disabled = self._isDisabled(param[0])
+                    _disabled = self._is_disabled(param[0])
                     if param[0].upper() != "NOTICE" and param[0].upper() != "PRIVMSG" and param[0].upper() != "JOIN" and \
                             param[0] != "":
 
@@ -1903,50 +1904,6 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                     except IndexError:
                                         raw_messages.raw(self, "411", self.nickname, param[0])
 
-                                elif param[0] == "INVITE":
-                                    if self._MODE_inviteblock:
-                                        raw_messages.raw(self, "998", self.nickname, self.nickname, "*")
-                                    else:
-                                        if param[2].lower() in server_context.channel_entries:
-                                            chanid = server_context.channel_entries[param[2].lower()]
-                                            if self.nickname.lower() in chanid._users:
-                                                if param[
-                                                    1].lower() in server_context.nickname_to_client_mapping_entries:
-                                                    if self.nickname.lower() in chanid._op or self.nickname.lower() in chanid._owner:
-                                                        cid = server_context.nickname_to_client_mapping_entries[
-                                                            param[1].lower()]
-                                                        if cid._MODE_inviteblock:
-                                                            raw_messages.raw(self, "998", self.nickname,
-                                                                             cid.nickname, chanid.channelname)
-                                                        else:
-                                                            if param[1].lower() in chanid._users and param[
-                                                                1].lower() not in chanid._watch:
-                                                                raw_messages.raw(self, "443", self.nickname,
-                                                                                 cid.nickname, chanid.channelname)
-                                                            else:
-
-                                                                sendinvite = True
-                                                                if self.selfaccess(cid) == False:
-                                                                    sendinvite = False
-
-                                                                if sendinvite:
-                                                                    raw_messages.raw(self, "341", self.nickname,
-                                                                                     cid.nickname, chanid.channelname)
-                                                                    cid.send(
-                                                                        ":%s!%s@%s INVITE %s :%s\r\n" %
-                                                                        (self.nickname, self._username, self._hostmask,
-                                                                         cid.nickname, chanid.channelname))
-                                                                    cid._invites.append(chanid.channelname.lower())
-                                                    else:
-                                                        raw_messages.raw(self, "482", self.nickname,
-                                                                         chanid.channelname)
-                                                else:
-                                                    raw_messages.raw(self, "401", self.nickname, param[1])
-                                            else:
-                                                raw_messages.raw(self, "442", self.nickname, chanid.channelname)
-                                        else:
-                                            raw_messages.raw(self, "403", self.nickname, param[2])
-
                                 elif param[0] == "NAMES":
                                     if chanid:
                                         chanid.sendnames(self.nickname)  # send when requested
@@ -1977,9 +1934,6 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                                  chanid.channelname, chanusers, chanid._topic)
 
                                     raw_messages.raw(self, "323", self.nickname)
-
-                                elif param[0] == "LIST" or param[0] == "LISTX":
-                                    list_command.execute(self, param)
 
                                 elif param[0] == "ACCESS":
                                     if chanid:
@@ -2423,6 +2377,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                                         else:
                                                             raw_messages.raw(self, "900", self.nickname, ret)
                                                     except:
+                                                        self.logger.debug(traceback.format_exc())
                                                         raw_messages.raw(self, "903", self.nickname, ret)
                                         else:
                                             raw_messages.raw(self, "913", self.nickname, ret)
@@ -2836,14 +2791,20 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                     except:
                                         pass
 
-                                elif param[0] == "KICK":
-                                    kick_command.execute(self, param)
-
                                 elif param[0] == "CREATE":
                                     create_command.execute(self, param)
 
+                                elif param[0] == "INVITE":
+                                    invite_command.execute(self, param)
+
                                 elif param[0] == "JOIN":
                                     join_command.execute(self, param)
+
+                                elif param[0] == "KICK":
+                                    kick_command.execute(self, param)
+
+                                elif param[0] == "LIST" or param[0] == "LISTX":
+                                    list_command.execute(self, param)
 
                                 elif param[0] == "PART":
                                     part_command.execute(self, param)

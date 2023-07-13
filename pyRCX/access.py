@@ -375,7 +375,7 @@ def AddRecord(cid, object, level, mask, expires, tag):
         entry = AccessInformation(objid.channelname, level, mask, setby, expires, tag, _operlevel)
         objid.ChannelAccess.append(entry)
     else:
-        entry = AccessInformation(objid._nickname, level, mask, setby, expires, tag, _operlevel)
+        entry = AccessInformation(objid.nickname, level, mask, setby, expires, tag, _operlevel)
         objid._access.append(entry)
 
     return 1
