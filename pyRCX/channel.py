@@ -391,23 +391,23 @@ class Channel:
         if nick.lower() in self._voice:
             self._voice.remove(nick.lower())
 
-    def kick(self, nick, knick, kickmsg):
-        clientid = self._nickname_to_client_mapping_entries[knick.lower()]
+    def kick(self, nick, nickname_to_be_kicked, kick_message):
+        clientid = self._nickname_to_client_mapping_entries[nickname_to_be_kicked.lower()]
         users_in_channel = self._users.keys()
         for each in users_in_channel:
             each_channel_user = self._server_context.get_user(each)
             if self.MODE_auditorium == False or self.has_channel_permissions(
                     each_channel_user.nickname) or self.has_channel_permissions(
                 nick.nickname) or self.has_channel_permissions(
-                knick.nickname) or each_channel_user.nickname.lower() == knick.lower():
+                nickname_to_be_kicked.nickname) or each_channel_user.nickname.lower() == nickname_to_be_kicked.lower():
                 # This is showing other people that are allowed to see the kick that the user is kicked
                 each_channel_user.send(
                     ":%s!%s@%s KICK %s %s :%s\r\n" %
-                    (nick.nickname, nick._username, nick._hostmask, self.channelname, knick, kickmsg))
+                    (nick.nickname, nick._username, nick._hostmask, self.channelname, nickname_to_be_kicked, kick_message))
 
         if self.channelname in clientid._channels:
             clientid._channels.remove(self.channelname)
-        self.__remuser(knick, False)
+        self.__remuser(nickname_to_be_kicked, False)
 
         if self._prop.onpart != "":
             iloop = 0

@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, List
 
 from pyRCX.channel import Channel
@@ -7,6 +8,75 @@ from pyRCX.operator import OperatorEntry
 from pyRCX.raw import Raw
 from pyRCX.server_context import ServerContext
 from pyRCX.user import User
+
+
+class KickCommand(Command):
+
+    def __init__(self, server_context: ServerContext,
+                 _raw_messages: Raw):
+        self._server_context = server_context
+        self._raw_messages = _raw_messages
+        self._logger = logger = logging.getLogger('COMMAND')
+
+    def execute(self, user: User, parameters: List[str]):
+        channel = self._server_context.get_channel(parameters[1])
+        if channel:
+            if user.nickname.lower() in channel._users:
+                user_as_operator = self._server_context.get_operator(user.nickname)
+
+                kick_message = ""
+                if len(parameters) > 3:
+                    kick_message = " ".join(parameters[3:])
+                    kick_message = kick_message[1:] if kick_message.startswith(":") else ""
+
+                for nickname_to_be_kicked in parameters[2].split(","):
+                    if nickname_to_be_kicked in self._server_context.nickname_to_client_mapping_entries:
+                        if nickname_to_be_kicked in channel._users:
+                            if len(kick_message) < 128:
+                                user_to_be_kicked = self._server_context.get_user(nickname_to_be_kicked)
+                                if not user_to_be_kicked:
+                                    self._logger.error(f"{nickname_to_be_kicked} was not found in context during kick "
+                                                       f"command")
+                                    continue
+
+                                nickname_to_be_kicked_as_operator = self._server_context.get_operator(
+                                    nickname_to_be_kicked)
+
+                                if nickname_to_be_kicked_as_operator is not None and user_as_operator is None:
+                                    self._raw_messages.raw(user, "481", user.nickname,
+                                                           "Permission Denied - You're not a System operator")
+
+                                elif user_to_be_kicked.nickname.lower() in self._server_context.operator_entries and user_as_operator is not None:
+                                    if user_as_operator.operator_level >= nickname_to_be_kicked_as_operator.operator_level:
+                                        channel.kick(user, nickname_to_be_kicked, kick_message)
+                                    else:
+                                        self._raw_messages.raw(user, "481", user.nickname,
+                                                               "Permission Denied - Insufficient operator privileges")
+                                    # operators can kick other operators but they have to be equal levels or higher
+                                else:
+                                    if user.nickname.lower() in channel._op:
+                                        if user_to_be_kicked.nickname.lower() in channel._owner or channel.MODE_ownerkick:
+                                            self._raw_messages.raw(user, "485", user.nickname, channel.channelname)
+                                        else:
+                                            channel.kick(user, nickname_to_be_kicked, kick_message)
+
+                                    elif user.nickname.lower() in channel._owner:
+                                        channel.kick(user, nickname_to_be_kicked, kick_message)
+                                    else:
+                                        if user_to_be_kicked.nickname.lower() in channel._owner:
+                                            self._raw_messages.raw(user, "485", user.nickname, channel.channelname)
+                                        else:
+                                            self._raw_messages.raw(user, "482", user.nickname, channel.channelname)
+                            else:
+                                self._raw_messages.raw(user, "906", user.nickname, channel.channelname)
+                        else:
+                            self._raw_messages.raw(user, "441", user.nickname, channel.channelname)
+                    else:
+                        self._raw_messages.raw(user, "401", user.nickname, parameters[2])
+            else:
+                self._raw_messages.raw(user, "442", user.nickname, channel.channelname)
+        else:
+            self._raw_messages.raw(user, "403", user.nickname, parameters[1])
 
 
 class PartCommand(Command):

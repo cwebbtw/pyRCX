@@ -19,7 +19,7 @@ from zlib import compress, decompress
 import pyRCX.access as access_helper
 
 from .channel import Channel
-from .commands.channel import JoinCommand, PartCommand, CreateCommand
+from .commands.channel import JoinCommand, PartCommand, CreateCommand, KickCommand
 from .commands.list import ListCommand
 from .commands.registration import UserCommand
 from .commands.topic import TopicCommand
@@ -42,6 +42,7 @@ access_helper.initialise(server_context, raw_messages)
 # Commands
 create_command: CreateCommand = CreateCommand(server_context, raw_messages)
 join_command: JoinCommand = JoinCommand(server_context, raw_messages)
+kick_command: KickCommand = KickCommand(server_context, raw_messages)
 list_command: ListCommand = ListCommand(server_context, raw_messages)
 part_command: PartCommand = PartCommand(server_context, raw_messages)
 topic_command: TopicCommand = TopicCommand(server_context, raw_messages)
@@ -2836,72 +2837,7 @@ class ClientConnecting(threading.Thread, User):  # TODO remove this multiple inh
                                         pass
 
                                 elif param[0] == "KICK":
-                                    if chanid:
-                                        if self.nickname.lower() in chanid._users:
-                                            iloop = 0
-
-                                            if len(param) > 3:
-                                                kickmsg = param[3]
-                                                if kickmsg[0] == ":":
-                                                    kickmsg = strdata.split(" ", 3)[3][1:]
-                                            else:
-                                                kickmsg = ""
-
-                                            while iloop < len(param[2].split(",")):
-                                                _kicknick = param[2].split(",")[iloop].lower()
-
-                                                if _kicknick in server_context.nickname_to_client_mapping_entries:
-                                                    if _kicknick in chanid._users:
-
-                                                        if len(kickmsg) < 128:
-                                                            cid = server_context.nickname_to_client_mapping_entries[
-                                                                _kicknick]
-
-                                                            if cid.nickname.lower() in server_context.operator_entries and self.nickname.lower() not in server_context.operator_entries:
-                                                                raw_messages.raw(self, "481", self.nickname,
-                                                                                 "Permission Denied - You're not a System operator")
-                                                            elif cid.nickname.lower() in server_context.operator_entries and self.nickname.lower() in server_context.operator_entries:
-                                                                opid = server_context.operator_entries[
-                                                                    self.nickname.lower()]
-                                                                sopid = server_context.operator_entries[
-                                                                    cid.nickname.lower()]
-                                                                if opid.operator_level >= sopid.operator_level:
-                                                                    chanid.kick(self, cid.nickname, kickmsg)
-                                                                else:
-                                                                    raw_messages.raw(self, "481", self.nickname,
-                                                                                     "Permission Denied - Insufficient oper priviledges")
-                                                                # opers can kick other opers but they have to be equal levels or higher
-                                                            else:
-                                                                if self.nickname.lower() in chanid._op:
-                                                                    if cid.nickname.lower() in chanid._owner or chanid.MODE_ownerkick:
-                                                                        raw_messages.raw(self, "485", self.nickname,
-                                                                                         chanid.channelname)
-                                                                    else:
-                                                                        chanid.kick(self, cid.nickname, kickmsg)
-
-                                                                elif self.nickname.lower() in chanid._owner:
-                                                                    chanid.kick(self, cid.nickname, kickmsg)
-                                                                else:
-                                                                    if cid.nickname.lower() in chanid._owner:
-                                                                        raw_messages.raw(self, "485", self.nickname,
-                                                                                         chanid.channelname)
-                                                                    else:
-                                                                        raw_messages.raw(self, "482", self.nickname,
-                                                                                         chanid.channelname)
-                                                        else:
-                                                            raw_messages.raw(self, "906", self.nickname,
-                                                                             chanid.channelname)
-                                                    else:
-                                                        raw_messages.raw(self, "441", self.nickname,
-                                                                         chanid.channelname)
-                                                else:
-                                                    raw_messages.raw(self, "401", self.nickname, param[2])
-
-                                                iloop += 1
-                                        else:
-                                            raw_messages.raw(self, "442", self.nickname, chanid.channelname)
-                                    else:
-                                        raw_messages.raw(self, "403", self.nickname, param[1])
+                                    kick_command.execute(self, param)
 
                                 elif param[0] == "CREATE":
                                     create_command.execute(self, param)
