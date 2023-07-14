@@ -155,6 +155,12 @@ There is currently no contributors guide as the code needs a considerable amount
 
 Apache 2.0
 
+## Related Projects
+
+IRC7 - An MSN chat re-write with modern technology and backwards compatibility
+
+https://wiki.msnld.com/wiki/Main_Page
+
 ## Credits
 
 _With thanks to_
